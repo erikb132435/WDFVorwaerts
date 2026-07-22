@@ -1,0 +1,121 @@
+{
+  "experiment": "stationary_sine",
+  "preset_name": "Spk-1",
+  "fs_hz": 96000.0,
+  "summary": "Spk-1: stationärer Sinus bei 28.750 Hz, 11.5 V RMS; geschätzte Resonanzfrequenz 57.219 Hz; THD -18.506 dB.",
+  "array_keys": [
+    "analysis",
+    "diaphragm_velocity",
+    "displacement",
+    "experiment",
+    "fs_hz",
+    "harmonic_freqs",
+    "harmonic_power_db",
+    "input",
+    "input_voltage",
+    "output",
+    "preset_name",
+    "psd_difference_db",
+    "reference_frequency_hz",
+    "reference_output_pressure",
+    "reference_psd_linear",
+    "reference_time_s",
+    "simulation_output_pressure_aligned",
+    "simulation_psd_linear_on_reference_grid",
+    "voice_coil_current",
+    "volume_velocity"
+  ],
+  "freq_hz": 28.75,
+  "resonance_hz": 57.219360709098666,
+  "settle_s": 0.2,
+  "harmonic_data": [
+    {
+      "harmonic": 1,
+      "target_hz": 28.75,
+      "bin_hz": 28.75,
+      "magnitude": 25.857081255036114,
+      "power_db": 25.241290047153953,
+      "relative_db": 0.0
+    },
+    {
+      "harmonic": 2,
+      "target_hz": 57.5,
+      "bin_hz": 57.5,
+      "magnitude": 0.793904929592723,
+      "power_db": -5.014929984302768,
+      "relative_db": -30.256220031456724
+    },
+    {
+      "harmonic": 3,
+      "target_hz": 86.25,
+      "bin_hz": 86.25,
+      "magnitude": 2.9113407502215596,
+      "power_db": 6.271560828744306,
+      "relative_db": -18.96972921840965
+    },
+    {
+      "harmonic": 4,
+      "target_hz": 115.0,
+      "bin_hz": 115.0,
+      "magnitude": 0.3153615803884423,
+      "power_db": -13.034124289757669,
+      "relative_db": -38.27541433691162
+    },
+    {
+      "harmonic": 5,
+      "target_hz": 143.75,
+      "bin_hz": 143.75,
+      "magnitude": 0.4748711900973928,
+      "power_db": -9.478783512199392,
+      "relative_db": -34.72007355935335
+    }
+  ],
+  "thd_db": -18.505945519098717,
+  "reference_metadata": {
+    "path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig6c\\FSF122.02-8_sin_P_psd_meas.txt",
+    "figure": "6c",
+    "preset_name": "Spk-1",
+    "speaker_model": "FSF122.02-8",
+    "source_type": "measurement",
+    "experiment": "sinusoid",
+    "quantity": "output_pressure_psd",
+    "domain": "frequency",
+    "x_unit": "Hz",
+    "value_unit": "Pa^2/Hz",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1e-06,
+    "fs_hz": 96000.0,
+    "expected_vrms": 11.5,
+    "expected_frequencies_hz": [
+      28.75
+    ],
+    "expected_phases_rad": [],
+    "notes": [
+      "Fig.-6-PSD mit Faktor 1e-6 auf Pa^2/Hz normiert; bestätigt durch Parseval-Konsistenz mit den bereitgestellten Fig.-6-Zeitreihen beider Lautsprecher."
+    ],
+    "psd_config": {
+      "window": "hamming",
+      "segment_length": 19200,
+      "overlap": 9600,
+      "nfft": 19200,
+      "detrend": false,
+      "scaling": "density",
+      "confirmed_properties": [
+        "Hamming-Fenster und Segmentlaenge gleich FFT-Laenge stimmen mit dem Leakage-Muster mehrerer Grundtoene in Fig. 6(c), 7(c) und 7(d) ueberein"
+      ],
+      "assumptions": [
+        "50 % Segmentueberlappung angenommen",
+        "Kein Detrending angenommen"
+      ]
+    }
+  },
+  "time_rmse_pa": 3.8094780624637186,
+  "time_reference_rms_pa": 21.884017511245776,
+  "time_nrmse_relative_rms": 0.17407580945802575,
+  "time_comparison_samples": 6720,
+  "time_comparison_duration_s": 0.06999999999999999,
+  "alignment_start_sample": 82753,
+  "alignment_start_s": 0.8620104166666667,
+  "nrmse_definition": "||P_sim - P_meas||_2 / ||P_meas||_2",
+  "reference_notice": "Referenz Fig. 6c: identisches Frequenzraster. Bestätigt: Hamming-Fenster und Segmentlaenge gleich FFT-Laenge stimmen mit dem Leakage-Muster mehrerer Grundtoene in Fig. 6(c), 7(c) und 7(d) ueberein. Noch unbestätigt: 50 % Segmentueberlappung angenommen; Kein Detrending angenommen. Referenzwerte wurden mit Faktor 1e-06 auf Pa²/Hz normiert. Zeitreferenz Fig. 6a, Spalte „11.5 V RMS, 28.75 Hz“; der Simulationsausschnitt wurde ausschließlich zeitlich per Kreuzkorrelation ausgerichtet. RMSE = 3.80948 Pa; relativer RMS-NRMSE = 0.174076 (17.408 %); N = 6720, Simulationsstart = 82753 Samples (862.010 ms)."
+}
