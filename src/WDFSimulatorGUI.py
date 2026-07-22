@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,7 @@ from matplotlib.figure import Figure
 from scipy.io import wavfile
 
 import WDFSolverVPres as wdf
+import WDFSolverFast as wdf_fast
 import spectral_comparison as comparison
 
 
@@ -46,6 +48,7 @@ PLOT_OPTIONS = {
     "nonlinear_characteristics": ["Nichtlineare Kennlinien"],
     "stationary_sine": [
         "Zeitverlauf",
+        "Solververgleich",
         "Leistungsdichtespektrum",
         "Leistungsspektrum",
         "Harmonische Komponenten",
@@ -53,17 +56,17 @@ PLOT_OPTIONS = {
         "Membrangeschwindigkeit",
         "Schwingspulenstrom",
     ],
-    "thd_frequency_response": ["THD über der Frequenz"],
+    "thd_frequency_response": ["THD über der Frequenz", "Solververgleich"],
     "two_tone": [
-        "Zeitverlauf", "Leistungsdichtespektrum", "Leistungsspektrum",
+        "Zeitverlauf", "Solververgleich", "Leistungsdichtespektrum", "Leistungsspektrum",
         "Membranauslenkung", "Membrangeschwindigkeit", "Schwingspulenstrom",
     ],
     "exponential_sweep": [
-        "Zeitverlauf", "Leistungsdichtespektrum", "Membranauslenkung",
+        "Zeitverlauf", "Solververgleich", "Leistungsdichtespektrum", "Membranauslenkung",
         "Membrangeschwindigkeit", "Schwingspulenstrom",
     ],
     "external_signal": [
-        "Zeitverlauf", "Leistungsdichtespektrum", "Leistungsspektrum",
+        "Zeitverlauf", "Solververgleich", "Leistungsdichtespektrum", "Leistungsspektrum",
         "Membranauslenkung", "Membrangeschwindigkeit", "Schwingspulenstrom",
     ],
 }
@@ -75,6 +78,15 @@ INPUT_LEVEL_MODES = {
     BERNARDINI_INPUT_LEVEL_MODE: float(np.sqrt(2.0)),
 }
 
+REFERENCE_SOLVER_MODE = "Referenzsolver"
+FAST_SOLVER_MODE = "Schneller Python-Solver"
+COMPARE_SOLVER_MODE = "Beide Solver vergleichen"
+SOLVER_MODES = (
+    REFERENCE_SOLVER_MODE,
+    FAST_SOLVER_MODE,
+    COMPARE_SOLVER_MODE,
+)
+
 
 @dataclass
 class SimulationResult:
@@ -85,6 +97,15 @@ class SimulationResult:
     fs: float | None
     data: dict[str, Any]
     summary: str
+
+
+@dataclass
+class SolverExecution:
+    """Primaerausgabe und Metadaten eines oder beider Solverpfade."""
+
+    output: np.ndarray
+    traces: dict[str, np.ndarray]
+    data: dict[str, Any]
 
 
 def _as_mono_float(data: np.ndarray) -> np.ndarray:
@@ -145,24 +166,230 @@ def _input_level_summary(nominal_vrms: float, effective_vrms: float, scale_facto
     return f"A_in = {nominal_vrms:g} V, effektiver RMS-Pegel = {effective_vrms:.6g} V"
 
 
+def _solver_result_summary(data: dict[str, Any]) -> str | None:
+    mode = data.get("solver_mode")
+    if mode is None:
+        return None
+    if mode == COMPARE_SOLVER_MODE:
+        return (
+            f"Solververgleich: Referenz {float(data['reference_solver_time_s']):.4g} s, "
+            f"schnell {float(data['fast_solver_time_s']):.4g} s, "
+            f"Faktor {float(data['solver_speedup']):.2f}; "
+            f"max. |Δp| {float(data['solver_max_abs_error_pa']):.3e} Pa."
+        )
+    backend = "reference" if mode == REFERENCE_SOLVER_MODE else "fast"
+    elapsed = data.get(f"{backend}_solver_time_s")
+    if elapsed is None:
+        return f"Solver: {mode}."
+    return f"Solver: {mode}; Rechenzeit {float(elapsed):.4g} s."
+
+
 def _simulate(
     fs: float,
     params: dict[str, Any],
     signal: np.ndarray,
     record_internal: bool,
-) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Fuehrt den Referenzsolver optional mit interner Zustandsaufzeichnung aus."""
-    model = wdf.BernardiniSpeakerSolver(fs, params)
-    simulation = wdf.simulate_model(
-        model,
-        np.asarray(signal, dtype=float),
-        record_traces=record_internal,
+    solver_mode: str = REFERENCE_SOLVER_MODE,
+) -> SolverExecution:
+    """Fuehrt den gewaehlten Solver oder einen direkten Parallelvergleich aus."""
+    if solver_mode not in SOLVER_MODES:
+        raise ValueError(f"Unbekannter Solvermodus: {solver_mode}")
+    input_signal = np.asarray(signal, dtype=np.float64)
+
+    def run_backend(backend: str) -> tuple[np.ndarray, dict[str, np.ndarray], float]:
+        started = time.perf_counter()
+        if backend == "reference":
+            model = wdf.BernardiniSpeakerSolver(fs, params)
+            simulation = wdf.simulate_model(
+                model,
+                input_signal,
+                record_traces=record_internal,
+            )
+        else:
+            model = wdf_fast.FastBernardiniSpeakerSolver(fs, params)
+            simulation = wdf_fast.simulate_model(
+                model,
+                input_signal,
+                record_traces=record_internal,
+            )
+        elapsed_s = time.perf_counter() - started
+        if not record_internal:
+            return np.asarray(simulation, dtype=np.float64), {}, elapsed_s
+        output = np.asarray(simulation["output_pressure"], dtype=np.float64)
+        traces = {
+            key: np.asarray(value)
+            for key, value in simulation.items()
+            if key not in {"input_voltage", "output_pressure"}
+        }
+        return output, traces, elapsed_s
+
+    requested_backends = {
+        REFERENCE_SOLVER_MODE: ("reference",),
+        FAST_SOLVER_MODE: ("fast",),
+        COMPARE_SOLVER_MODE: ("reference", "fast"),
+    }[solver_mode]
+    runs = {backend: run_backend(backend) for backend in requested_backends}
+    primary_backend = "fast" if "fast" in runs else "reference"
+    output, traces, _elapsed_s = runs[primary_backend]
+    data: dict[str, Any] = {
+        "solver_mode": solver_mode,
+        "primary_solver_backend": primary_backend,
+    }
+    for backend, (backend_output, backend_traces, elapsed_s) in runs.items():
+        data[f"{backend}_solver_time_s"] = float(elapsed_s)
+        if len(runs) > 1:
+            data[f"{backend}_solver_output"] = backend_output
+            for key, value in backend_traces.items():
+                data[f"{backend}_solver_{key}"] = value
+
+    if len(runs) > 1:
+        reference_output = runs["reference"][0]
+        fast_output = runs["fast"][0]
+        difference = fast_output - reference_output
+        reference_energy = float(np.dot(reference_output, reference_output))
+        difference_energy = float(np.dot(difference, difference))
+        data.update(
+            {
+                "solver_difference": difference,
+                "solver_max_abs_error_pa": float(np.max(np.abs(difference), initial=0.0)),
+                "solver_rmse_pa": float(np.sqrt(np.mean(difference * difference)))
+                if difference.size
+                else 0.0,
+                "solver_relative_l2_error": float(np.sqrt(difference_energy / reference_energy))
+                if reference_energy > np.finfo(float).tiny
+                else float(np.sqrt(difference_energy)),
+                "solver_speedup": float(runs["reference"][2] / runs["fast"][2])
+                if runs["fast"][2] > 0.0
+                else float("inf"),
+            }
+        )
+    return SolverExecution(output, traces, data)
+
+
+def _compute_stationary_thd_curve(
+    fs: float,
+    params: dict[str, Any],
+    vrms: float,
+    f_min_hz: float,
+    f_max_hz: float,
+    num_points: int,
+    harmonics: int,
+    include_freqs_hz: list[float],
+    solver_mode: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
+    """Berechnet die THD-Reihe ueber denselben waehlbaren Solveradapter."""
+    frequencies = wdf.build_log_frequency_grid(
+        f_min_hz,
+        f_max_hz,
+        num_points,
+        include_freqs_hz=include_freqs_hz,
     )
-    if not record_internal:
-        return simulation, {}
-    output = simulation["output_pressure"]
-    traces = {key: value for key, value in simulation.items() if key != "output_pressure"}
-    return output, traces
+    thd_db = np.full(len(frequencies), np.nan, dtype=float)
+    dominant_harmonics = np.full(len(frequencies), np.nan, dtype=float)
+    dominant_relative_db = np.full(len(frequencies), np.nan, dtype=float)
+    comparison_curves = {
+        "reference": np.full(len(frequencies), np.nan, dtype=float),
+        "fast": np.full(len(frequencies), np.nan, dtype=float),
+    }
+    elapsed = {"reference": 0.0, "fast": 0.0}
+    reference_energy = 0.0
+    difference_energy = 0.0
+    comparison_samples = 0
+    maximum_absolute_error = 0.0
+
+    for index, frequency_hz in enumerate(frequencies):
+        duration_s, settle_s = wdf.stationary_tone_timing(float(frequency_hz))
+        tone = wdf.generate_sine(fs, duration_s, float(frequency_hz), vrms)
+        execution = _simulate(fs, params, tone, False, solver_mode)
+        primary_point = wdf.compute_output_thd_point(
+            execution.output,
+            fs,
+            float(frequency_hz),
+            harmonics=harmonics,
+            settle_s=settle_s,
+        )
+        thd_db[index] = primary_point["thd_db"]
+        dominant_harmonics[index] = (
+            primary_point["dominant_harmonic"]
+            if primary_point["dominant_harmonic"] is not None
+            else np.nan
+        )
+        dominant_relative_db[index] = primary_point["dominant_relative_db"]
+
+        for backend in ("reference", "fast"):
+            timing_key = f"{backend}_solver_time_s"
+            if timing_key in execution.data:
+                elapsed[backend] += float(execution.data[timing_key])
+
+        if solver_mode == COMPARE_SOLVER_MODE:
+            reference_output = execution.data["reference_solver_output"]
+            fast_output = execution.data["fast_solver_output"]
+            for backend, backend_output in (
+                ("reference", reference_output),
+                ("fast", fast_output),
+            ):
+                comparison_curves[backend][index] = wdf.compute_output_thd_point(
+                    backend_output,
+                    fs,
+                    float(frequency_hz),
+                    harmonics=harmonics,
+                    settle_s=settle_s,
+                )["thd_db"]
+            difference = fast_output - reference_output
+            reference_energy += float(np.dot(reference_output, reference_output))
+            difference_energy += float(np.dot(difference, difference))
+            comparison_samples += len(difference)
+            maximum_absolute_error = max(
+                maximum_absolute_error,
+                float(np.max(np.abs(difference), initial=0.0)),
+            )
+
+    primary_backend = "fast" if solver_mode != REFERENCE_SOLVER_MODE else "reference"
+    solver_data: dict[str, Any] = {
+        "solver_mode": solver_mode,
+        "primary_solver_backend": primary_backend,
+    }
+    for backend, elapsed_s in elapsed.items():
+        if elapsed_s > 0.0:
+            solver_data[f"{backend}_solver_time_s"] = elapsed_s
+    if solver_mode == COMPARE_SOLVER_MODE:
+        solver_data.update(
+            {
+                "reference_solver_thd_db": comparison_curves["reference"],
+                "fast_solver_thd_db": comparison_curves["fast"],
+                "solver_thd_difference_db": (
+                    comparison_curves["fast"] - comparison_curves["reference"]
+                ),
+                "solver_max_abs_error_pa": maximum_absolute_error,
+                "solver_rmse_pa": float(np.sqrt(difference_energy / comparison_samples))
+                if comparison_samples
+                else 0.0,
+                "solver_relative_l2_error": float(np.sqrt(difference_energy / reference_energy))
+                if reference_energy > np.finfo(float).tiny
+                else float(np.sqrt(difference_energy)),
+                "solver_speedup": float(elapsed["reference"] / elapsed["fast"])
+                if elapsed["fast"] > 0.0
+                else float("inf"),
+            }
+        )
+    return frequencies, thd_db, dominant_harmonics, dominant_relative_db, solver_data
+
+
+def _solver_analysis_data(
+    execution: SolverExecution,
+    prepare: Any,
+) -> dict[str, np.ndarray]:
+    """Bereitet im Vergleichsmodus identische Analysefenster fuer beide Ausgaenge vor."""
+    if execution.data.get("solver_mode") != COMPARE_SOLVER_MODE:
+        return {}
+    return {
+        "reference_solver_analysis": np.asarray(
+            prepare(execution.data["reference_solver_output"]), dtype=float
+        ),
+        "fast_solver_analysis": np.asarray(
+            prepare(execution.data["fast_solver_output"]), dtype=float
+        ),
+    }
 
 
 def _load_optional_reference(
@@ -369,6 +596,9 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
     fs = float(config["fs"])
     if fs <= 0.0:
         raise ValueError("Die Abtastrate muss positiv sein.")
+    solver_mode = str(config.get("solver_mode", REFERENCE_SOLVER_MODE))
+    if solver_mode not in SOLVER_MODES:
+        raise ValueError(f"Unbekannter Solvermodus: {solver_mode}")
     nominal_vrms, effective_vrms, input_scale, input_level_mode = _resolve_input_level(config)
     input_level_data = _input_level_metadata(
         nominal_vrms, effective_vrms, input_scale, input_level_mode
@@ -392,8 +622,21 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             raise ValueError("Die Einschwingzeit muss kleiner als die Signaldauer sein.")
 
         signal = wdf.generate_sine(fs, duration_s, freq_hz, effective_vrms)
-        output, traces = _simulate(fs, params, signal, bool(config.get("record_internal", False)))
+        execution = _simulate(
+            fs,
+            params,
+            signal,
+            bool(config.get("record_internal", False)),
+            solver_mode,
+        )
+        output, traces = execution.output, execution.traces
         analysis = wdf.prepare_analysis_signal(output, fs, settle_s, [freq_hz])
+        solver_analysis_data = _solver_analysis_data(
+            execution,
+            lambda solver_output: wdf.prepare_analysis_signal(
+                solver_output, fs, settle_s, [freq_hz]
+            ),
+        )
         harmonic_data, harmonic_freqs, harmonic_power_db = wdf.measure_harmonic_levels_db(
             analysis, fs, freq_hz, harmonics=int(config["harmonics"])
         )
@@ -419,7 +662,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
                 "harmonic_freqs": harmonic_freqs,
                 "harmonic_power_db": harmonic_power_db,
                 "thd_db": thd_point["thd_db"],
-            }, **input_level_data, **traces, **reference_data),
+            }, **input_level_data, **traces, **execution.data, **solver_analysis_data, **reference_data),
             (
                 f"{preset_name}: stationärer Sinus bei {freq_hz:.3f} Hz, "
                 f"{_input_level_summary(vrms, effective_vrms, input_scale)}; "
@@ -433,8 +676,8 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         if not 0.0 < f_min < f_max < fs / 2.0:
             raise ValueError("Der Frequenzbereich muss innerhalb (0, Nyquist) liegen.")
         resonance_hz = wdf.estimate_small_signal_resonance(params)
-        freqs, thd_db, dominant_harmonics, dominant_relative_db = (
-            wdf.compute_stationary_sine_thd_curve(
+        freqs, thd_db, dominant_harmonics, dominant_relative_db, solver_data = (
+            _compute_stationary_thd_curve(
                 fs,
                 params,
                 effective_vrms,
@@ -443,6 +686,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
                 num_points=int(config["frequency_points"]),
                 harmonics=int(config["harmonics"]),
                 include_freqs_hz=[0.5 * resonance_hz, 2.0 * resonance_hz],
+                solver_mode=solver_mode,
             )
         )
         return SimulationResult(
@@ -455,6 +699,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
                 "dominant_harmonics": dominant_harmonics,
                 "dominant_relative_db": dominant_relative_db,
                 **input_level_data,
+                **solver_data,
             },
             (
                 f"{preset_name}: THD aus {len(freqs)} stationären Sinusmessungen "
@@ -481,8 +726,21 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             phase1_rad=float(config["phase1_rad"]),
             phase2_rad=float(config["phase2_rad"]),
         )
-        output, traces = _simulate(fs, params, signal, bool(config.get("record_internal", False)))
+        execution = _simulate(
+            fs,
+            params,
+            signal,
+            bool(config.get("record_internal", False)),
+            solver_mode,
+        )
+        output, traces = execution.output, execution.traces
         analysis = wdf.prepare_two_tone_analysis_signal(output, fs, settle_s)
+        solver_analysis_data = _solver_analysis_data(
+            execution,
+            lambda solver_output: wdf.prepare_two_tone_analysis_signal(
+                solver_output, fs, settle_s
+            ),
+        )
         reference = _load_optional_reference(config, preset_name, expected_experiment="two_tone")
         reference_data = _reference_comparison_data(
             reference,
@@ -507,6 +765,8 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
                     **input_level_data,
                 },
                 **traces,
+                **execution.data,
+                **solver_analysis_data,
                 **reference_data,
             ),
             (
@@ -524,8 +784,19 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         signal, inverse = wdf.generate_sweep(
             fs, duration_s, f_min, f_max, effective_vrms
         )
-        output, traces = _simulate(fs, params, signal, bool(config.get("record_internal", False)))
+        execution = _simulate(
+            fs,
+            params,
+            signal,
+            bool(config.get("record_internal", False)),
+            solver_mode,
+        )
+        output, traces = execution.output, execution.traces
         analysis = wdf.prepare_analysis_signal(output, fs)
+        solver_analysis_data = _solver_analysis_data(
+            execution,
+            lambda solver_output: wdf.prepare_analysis_signal(solver_output, fs),
+        )
         return SimulationResult(
             experiment,
             preset_name,
@@ -539,6 +810,8 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
                     **input_level_data,
                 },
                 **traces,
+                **execution.data,
+                **solver_analysis_data,
             ),
             (
                 f"{preset_name}: exponentieller Sinus-Sweep von {f_min:g} Hz bis {f_max:g} Hz; "
@@ -564,11 +837,24 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             raise ValueError("Die Signaldatei ist leer.")
         if bool(config["normalise_external"]):
             signal = _normalise_rms(signal, effective_vrms)
-        output, traces = _simulate(fs, params, signal, bool(config.get("record_internal", False)))
+        execution = _simulate(
+            fs,
+            params,
+            signal,
+            bool(config.get("record_internal", False)),
+            solver_mode,
+        )
+        output, traces = execution.output, execution.traces
         settle_s = float(config["settle_s"])
         if not 0.0 <= settle_s < len(signal) / fs:
             raise ValueError("Die Einschwingzeit muss kleiner als die Dauer des externen Signals sein.")
         analysis = wdf.prepare_analysis_signal(output, fs, settle_s)
+        solver_analysis_data = _solver_analysis_data(
+            execution,
+            lambda solver_output: wdf.prepare_analysis_signal(
+                solver_output, fs, settle_s
+            ),
+        )
         reference = _load_optional_reference(config, preset_name, expected_experiment="music")
         reference_data = _reference_comparison_data(
             reference, output, fs, nominal_vrms, settle_s
@@ -586,6 +872,8 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
                     **input_level_data,
                 },
                 **traces,
+                **execution.data,
+                **solver_analysis_data,
                 **reference_data,
             ),
             (
@@ -619,6 +907,7 @@ class WDFSimulatorGUI(tk.Tk):
     def _create_variables(self) -> None:
         self.experiment_label = tk.StringVar(value="Stationäre Sinusanregung")
         self.preset_name = tk.StringVar(value="Spk-1")
+        self.solver_mode = tk.StringVar(value=REFERENCE_SOLVER_MODE)
         self.plot_kind = tk.StringVar(value="Zeitverlauf")
         self.fs = tk.StringVar(value="48000")
         self.vrms = tk.StringVar(value="11.5")
@@ -645,6 +934,7 @@ class WDFSimulatorGUI(tk.Tk):
         self.reference_path = tk.StringVar(value="")
         self.status_text = tk.StringVar(value="Bereit")
         self.summary_text = tk.StringVar(value="Noch keine Untersuchung ausgeführt.")
+        self._details_expanded = False
 
     def _create_layout(self) -> None:
         outer = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
@@ -685,6 +975,7 @@ class WDFSimulatorGUI(tk.Tk):
         )
 
         params = [
+            ("solver_mode", "Solver", self.solver_mode, list(SOLVER_MODES)),
             ("fs", "Abtastrate F_s [Hz]", self.fs, None),
             ("vrms", "Nennpegel A_in [V]", self.vrms, None),
             (
@@ -780,12 +1071,207 @@ class WDFSimulatorGUI(tk.Tk):
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         summary = ttk.LabelFrame(plot_area, text="Ergebnis", padding=8)
         summary.pack(side=tk.BOTTOM, fill=tk.X, pady=(7, 0))
-        ttk.Label(summary, textvariable=self.summary_text, wraplength=800).pack(anchor="w")
+        summary_header = ttk.Frame(summary)
+        summary_header.pack(fill=tk.X)
+        summary_label = ttk.Label(
+            summary_header,
+            textvariable=self.summary_text,
+            wraplength=760,
+            justify=tk.LEFT,
+        )
+        summary_label.pack(side=tk.LEFT, fill=tk.X, expand=True, anchor="w")
+        self.details_button = ttk.Button(
+            summary_header,
+            text="Details anzeigen ▸",
+            command=self._toggle_result_details,
+            width=18,
+            state=tk.DISABLED,
+        )
+        self.details_button.pack(side=tk.RIGHT, padx=(10, 0), anchor="n")
+
+        self.details_frame = ttk.Frame(summary)
+        ttk.Separator(self.details_frame).pack(fill=tk.X, pady=(8, 6))
+        details_body = ttk.Frame(self.details_frame)
+        details_body.pack(fill=tk.BOTH, expand=True)
+        self.details_widget = tk.Text(
+            details_body,
+            height=9,
+            wrap=tk.WORD,
+            relief=tk.FLAT,
+            borderwidth=0,
+            padx=4,
+            pady=3,
+            font="TkDefaultFont",
+            cursor="arrow",
+        )
+        details_scrollbar = ttk.Scrollbar(
+            details_body,
+            orient=tk.VERTICAL,
+            command=self.details_widget.yview,
+        )
+        self.details_widget.configure(yscrollcommand=details_scrollbar.set, state=tk.DISABLED)
+        self.details_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        details_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self._set_result_details_text("Noch keine Ergebnisdetails verfügbar.")
 
         axis = self.figure.add_subplot(111)
         axis.text(0.5, 0.5, "Untersuchung konfigurieren und ausführen", ha="center", va="center")
         axis.set_axis_off()
         self.canvas.draw_idle()
+
+    def _set_result_details_text(self, text: str) -> None:
+        self.details_widget.configure(state=tk.NORMAL)
+        self.details_widget.delete("1.0", tk.END)
+        self.details_widget.insert("1.0", text)
+        self.details_widget.configure(state=tk.DISABLED)
+
+    def _set_result_details_expanded(self, expanded: bool) -> None:
+        self._details_expanded = bool(expanded)
+        if self._details_expanded:
+            self.details_frame.pack(fill=tk.BOTH, expand=True)
+            self.details_button.configure(text="Details ausblenden ▾")
+        else:
+            self.details_frame.pack_forget()
+            self.details_button.configure(text="Details anzeigen ▸")
+
+    def _toggle_result_details(self) -> None:
+        self._set_result_details_expanded(not self._details_expanded)
+
+    @staticmethod
+    def _format_result_brief(result: SimulationResult) -> str:
+        time_comparison = result.data.get("reference_time_comparison")
+        lines = [result.summary]
+        solver_summary = _solver_result_summary(result.data)
+        if solver_summary is not None:
+            lines.append(solver_summary)
+        if time_comparison is not None:
+            lines.append(
+                f"Zeitvergleich: NRMSE AC {100.0 * time_comparison.ac_nrmse:.2f} %  ·  "
+                f"NRMSE absolut {100.0 * time_comparison.nrmse:.2f} %"
+            )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_result_details(result: SimulationResult) -> str:
+        lines = [
+            "SIMULATION",
+            f"Untersuchung: {result.experiment}",
+            f"Lautsprechermodell: {result.preset_name}",
+        ]
+        if result.fs is not None:
+            lines.append(f"Abtastrate: {result.fs:g} Hz")
+        lines.append(f"Zusammenfassung: {result.summary}")
+
+        solver_mode = result.data.get("solver_mode")
+        if solver_mode is not None:
+            lines.extend(["", "SOLVER", f"Modus: {solver_mode}"])
+            primary_backend = result.data.get("primary_solver_backend")
+            if primary_backend is not None:
+                primary_label = (
+                    REFERENCE_SOLVER_MODE if primary_backend == "reference" else FAST_SOLVER_MODE
+                )
+                lines.append(f"Primärausgabe für Auswertungen: {primary_label}")
+            if "reference_solver_time_s" in result.data:
+                lines.append(
+                    f"Rechenzeit Referenzsolver: {float(result.data['reference_solver_time_s']):.6g} s"
+                )
+            if "fast_solver_time_s" in result.data:
+                lines.append(
+                    f"Rechenzeit schneller Solver: {float(result.data['fast_solver_time_s']):.6g} s"
+                )
+            if "solver_speedup" in result.data:
+                lines.extend(
+                    [
+                        f"Beschleunigungsfaktor: {float(result.data['solver_speedup']):.4g}",
+                        f"Maximale Sampleabweichung: "
+                        f"{float(result.data['solver_max_abs_error_pa']):.6e} Pa",
+                        f"RMSE zwischen Solvern: {float(result.data['solver_rmse_pa']):.6e} Pa",
+                        f"Relativer L2-Fehler: {float(result.data['solver_relative_l2_error']):.6e}",
+                        "Beide Solver erhielten dasselbe einmalig erzeugte Eingangssignal.",
+                    ]
+                )
+
+        nominal_level = result.data.get("nominal_input_level_vrms")
+        effective_level = result.data.get("effective_input_level_vrms")
+        level_mode = result.data.get("input_level_mode")
+        if nominal_level is not None or effective_level is not None or level_mode is not None:
+            lines.extend(["", "PEGELKONVENTION"])
+            if level_mode is not None:
+                lines.append(f"Modus: {level_mode}")
+            if nominal_level is not None:
+                lines.append(f"Nennpegel A_in: {float(nominal_level):g} V RMS")
+            if effective_level is not None:
+                lines.append(f"Effektiver Simulationspegel: {float(effective_level):g} V RMS")
+
+        time_comparison = result.data.get("reference_time_comparison")
+        if time_comparison is not None:
+            lines.extend(
+                [
+                    "",
+                    "ZEITVERGLEICH",
+                    f"NRMSE absolut: {time_comparison.nrmse:.6f} "
+                    f"({100.0 * time_comparison.nrmse:.3f} %)",
+                    f"NRMSE AC: {time_comparison.ac_nrmse:.6f} "
+                    f"({100.0 * time_comparison.ac_nrmse:.3f} %)",
+                    f"RMSE absolut: {time_comparison.rmse_pa:.6g} Pa",
+                    f"Vergleichsdauer: {time_comparison.duration_s:.6g} s "
+                    f"({time_comparison.comparison_samples} Samples)",
+                    f"Simulationsstart: {time_comparison.alignment_start_samples:.3f} Samples",
+                    f"Subsample-Offset: {time_comparison.fractional_offset_samples:+.4f} Samples",
+                    f"Normierte Korrelation: {time_comparison.alignment_correlation:.8f}",
+                    "Ausrichtung ausschließlich zeitlich; keine Pegel- oder Gain-Anpassung.",
+                ]
+            )
+
+        metadata_items: list[dict[str, Any]] = []
+        for key in ("reference_metadata", "time_reference_metadata"):
+            metadata = result.data.get(key)
+            if isinstance(metadata, dict) and not any(
+                existing.get("path") == metadata.get("path") for existing in metadata_items
+            ):
+                metadata_items.append(metadata)
+
+        for index, metadata in enumerate(metadata_items):
+            title = "REFERENZ" if index == 0 else "ZEITREFERENZ"
+            lines.extend(["", title])
+            if metadata.get("figure"):
+                lines.append(f"Abbildung: Fig. {metadata['figure']}")
+            if metadata.get("path"):
+                lines.append(f"Datei: {metadata['path']}")
+            if metadata.get("source_type"):
+                lines.append(f"Quelle: {metadata['source_type']}")
+            if metadata.get("value_unit"):
+                lines.append(f"Messgröße: {metadata.get('quantity', '–')} [{metadata['value_unit']}]")
+
+            psd_config = metadata.get("psd_config")
+            if isinstance(psd_config, dict):
+                lines.extend(
+                    [
+                        "",
+                        "SPEKTRALAUSWERTUNG",
+                        f"Fenster: {psd_config.get('window', '–')}",
+                        f"Segment-/FFT-Länge: {psd_config.get('segment_length', '–')} / "
+                        f"{psd_config.get('nfft', '–')}",
+                        f"Überlappung: {psd_config.get('overlap', '–')} Samples",
+                        f"Detrending: {psd_config.get('detrend', '–')}",
+                        f"Skalierung: {psd_config.get('scaling', '–')}",
+                    ]
+                )
+                confirmed = psd_config.get("confirmed_properties", [])
+                if confirmed:
+                    lines.append("Bestätigt:")
+                    lines.extend(f"  • {item}" for item in confirmed)
+                assumptions = psd_config.get("assumptions", [])
+                if assumptions:
+                    lines.append("Annahmen:")
+                    lines.extend(f"  • {item}" for item in assumptions)
+
+            notes = metadata.get("notes", [])
+            if notes:
+                lines.append("Hinweise:")
+                lines.extend(f"  • {item}" for item in notes)
+
+        return "\n".join(lines)
 
     def _show_rows(self, keys: set[str]) -> None:
         for key, (label, widget) in self._parameter_rows.items():
@@ -801,30 +1287,33 @@ class WDFSimulatorGUI(tk.Tk):
         if self.result is not None and self.result.experiment != experiment:
             self.result = None
             self.summary_text.set("Für die gewählte Untersuchung liegt noch kein Ergebnis vor.")
+            self._set_result_details_text("Noch keine Ergebnisdetails verfügbar.")
+            self._set_result_details_expanded(False)
+            self.details_button.configure(state=tk.DISABLED)
             self.save_data_button.configure(state=tk.DISABLED)
             self.save_plot_button.configure(state=tk.DISABLED)
         rows = {
             "small_signal_reference": {"reference_path"},
             "nonlinear_characteristics": {"x_min_mm", "x_max_mm", "points"},
             "stationary_sine": {
-                "fs", "vrms", "input_level_mode", "duration_s", "settle_s", "frequency_mode",
+                "solver_mode", "fs", "vrms", "input_level_mode", "duration_s", "settle_s", "frequency_mode",
                 "freq_hz", "harmonics",
                 "record_internal", "reference_enabled", "reference_path",
             },
             "thd_frequency_response": {
-                "fs", "vrms", "input_level_mode", "f_min_hz", "f_max_hz",
+                "solver_mode", "fs", "vrms", "input_level_mode", "f_min_hz", "f_max_hz",
                 "frequency_points", "harmonics"
             },
             "two_tone": {
-                "fs", "vrms", "input_level_mode", "duration_s", "settle_s", "freq1_hz", "freq2_hz",
+                "solver_mode", "fs", "vrms", "input_level_mode", "duration_s", "settle_s", "freq1_hz", "freq2_hz",
                 "phase1_rad", "phase2_rad", "record_internal", "reference_enabled", "reference_path",
             },
             "exponential_sweep": {
-                "fs", "vrms", "input_level_mode", "duration_s", "f_min_hz", "f_max_hz",
+                "solver_mode", "fs", "vrms", "input_level_mode", "duration_s", "f_min_hz", "f_max_hz",
                 "record_internal"
             },
             "external_signal": {
-                "fs", "vrms", "input_level_mode", "settle_s", "signal_path", "normalise_external",
+                "solver_mode", "fs", "vrms", "input_level_mode", "settle_s", "signal_path", "normalise_external",
                 "record_internal",
                 "reference_enabled", "reference_path",
             },
@@ -905,6 +1394,7 @@ class WDFSimulatorGUI(tk.Tk):
         return {
             "experiment": EXPERIMENTS[self.experiment_label.get()],
             "preset_name": self.preset_name.get(),
+            "solver_mode": self.solver_mode.get(),
             "fs": float(self.fs.get()),
             "vrms": float(self.vrms.get()),
             "input_level_mode": self.input_level_mode.get(),
@@ -964,8 +1454,10 @@ class WDFSimulatorGUI(tk.Tk):
             self.run_button.configure(state=tk.NORMAL)
             if kind == "result":
                 self.result = payload
-                notice = payload.data.get("reference_notice")
-                self.summary_text.set(payload.summary if not notice else f"{payload.summary} {notice}")
+                self.summary_text.set(self._format_result_brief(payload))
+                self._set_result_details_text(self._format_result_details(payload))
+                self._set_result_details_expanded(False)
+                self.details_button.configure(state=tk.NORMAL)
                 self.status_text.set("Untersuchung erfolgreich abgeschlossen.")
                 self.save_data_button.configure(state=tk.NORMAL)
                 self.save_plot_button.configure(state=tk.NORMAL)
@@ -1048,6 +1540,103 @@ class WDFSimulatorGUI(tk.Tk):
             self.canvas.draw_idle()
             return
 
+        if plot_kind == "Solververgleich":
+            if result.data.get("solver_mode") != COMPARE_SOLVER_MODE:
+                axis = self.figure.add_subplot(111)
+                axis.text(
+                    0.5,
+                    0.5,
+                    "Für diese Darstellung den Modus\n„Beide Solver vergleichen“ wählen\n"
+                    "und die Untersuchung erneut ausführen.",
+                    ha="center",
+                    va="center",
+                    transform=axis.transAxes,
+                )
+                axis.set_axis_off()
+                self.canvas.draw_idle()
+                return
+
+            axes = self.figure.subplots(
+                2,
+                1,
+                sharex=True,
+                gridspec_kw={"height_ratios": [3, 1]},
+            )
+            if result.experiment == "thd_frequency_response":
+                frequencies = result.data["frequencies_hz"]
+                reference_values = result.data["reference_solver_thd_db"]
+                fast_values = result.data["fast_solver_thd_db"]
+                difference = result.data["solver_thd_difference_db"]
+                axes[0].semilogx(
+                    frequencies,
+                    reference_values,
+                    label=REFERENCE_SOLVER_MODE,
+                    marker="o",
+                    ms=4,
+                )
+                axes[0].semilogx(
+                    frequencies,
+                    fast_values,
+                    label=FAST_SOLVER_MODE,
+                    linestyle="--",
+                    marker="x",
+                    ms=4,
+                )
+                axes[0].set_ylabel("THD [dB]")
+                axes[1].semilogx(frequencies, difference, color="tab:red", marker=".")
+                axes[1].set_xlabel(r"Anregungsfrequenz $f_{in}$ [Hz]")
+                axes[1].set_ylabel(r"$\Delta$THD [dB]")
+            else:
+                fs = float(result.fs)
+                reference_output, reference_stride = self._decimated(
+                    result.data["reference_solver_output"]
+                )
+                fast_output, fast_stride = self._decimated(result.data["fast_solver_output"])
+                difference, difference_stride = self._decimated(result.data["solver_difference"])
+                reference_time = np.arange(len(reference_output)) * reference_stride / fs
+                fast_time = np.arange(len(fast_output)) * fast_stride / fs
+                difference_time = np.arange(len(difference)) * difference_stride / fs
+                axes[0].plot(
+                    reference_time,
+                    reference_output,
+                    label=REFERENCE_SOLVER_MODE,
+                    linewidth=1.0,
+                )
+                axes[0].plot(
+                    fast_time,
+                    fast_output,
+                    label=FAST_SOLVER_MODE,
+                    linewidth=0.9,
+                    linestyle="--",
+                    alpha=0.9,
+                )
+                axes[0].set_ylabel(r"$P_{out}$ [Pa]")
+                axes[1].plot(difference_time, difference, color="tab:red", linewidth=0.8)
+                axes[1].set_xlabel("Zeit [s]")
+                axes[1].set_ylabel(r"$\Delta P$ [Pa]")
+
+            axes[0].set_title(f"Direkter Solververgleich – {result.preset_name}")
+            axes[0].legend()
+            axes[0].grid(True, which="both", linestyle=":", alpha=0.7)
+            axes[1].axhline(0.0, color="black", linewidth=0.7)
+            axes[1].grid(True, which="both", linestyle=":", alpha=0.7)
+            axes[0].text(
+                0.99,
+                0.02,
+                (
+                    f"Beschleunigung: {result.data['solver_speedup']:.2f}×\n"
+                    f"max. |Δp|: {result.data['solver_max_abs_error_pa']:.3e} Pa\n"
+                    f"rel. L2: {result.data['solver_relative_l2_error']:.3e}"
+                ),
+                transform=axes[0].transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=9,
+                bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.85},
+            )
+            self.canvas.draw_idle()
+            return
+
         if result.experiment == "thd_frequency_response":
             axis = self.figure.add_subplot(111)
             axis.semilogx(result.data["frequencies_hz"], result.data["thd_db"], marker="o", ms=4)
@@ -1074,7 +1663,11 @@ class WDFSimulatorGUI(tk.Tk):
             axes[0].semilogx(
                 spectral.frequency_hz[positive],
                 spectral.simulation_db[positive],
-                label="Aktueller WDF-Solver",
+                label=(
+                    FAST_SOLVER_MODE
+                    if result.data.get("primary_solver_backend") == "fast"
+                    else REFERENCE_SOLVER_MODE
+                ),
                 linewidth=1.0,
             )
             axes[0].set_ylabel(r"PSD von $P_{out}$ [dB/Hz]")
@@ -1110,7 +1703,10 @@ class WDFSimulatorGUI(tk.Tk):
                 axis.plot(
                     time_comparison.time_s,
                     time_comparison.simulation,
-                    label="Aktueller WDF-Solver (normiert und subsample-ausgerichtet)",
+                    label=(
+                        (FAST_SOLVER_MODE if result.data.get("primary_solver_backend") == "fast" else REFERENCE_SOLVER_MODE)
+                        + " (subsample-ausgerichtet)"
+                    ),
                     linewidth=1.0,
                     alpha=0.85,
                 )
@@ -1133,12 +1729,42 @@ class WDFSimulatorGUI(tk.Tk):
                     bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.85},
                 )
             else:
-                output, output_stride = self._decimated(result.data["output"])
                 input_signal, input_stride = self._decimated(result.data["input"])
-                t_out = np.arange(len(output)) * output_stride / fs
                 t_in = np.arange(len(input_signal)) * input_stride / fs
                 axis.plot(t_in, input_signal, label=r"$V_{in}(t)$", linewidth=0.9)
-                axis.plot(t_out, output, label=r"$P_{out}(t)$", linewidth=0.9, alpha=0.85)
+                if result.data.get("solver_mode") == COMPARE_SOLVER_MODE:
+                    reference_output, reference_stride = self._decimated(
+                        result.data["reference_solver_output"]
+                    )
+                    fast_output, fast_stride = self._decimated(
+                        result.data["fast_solver_output"]
+                    )
+                    reference_time = np.arange(len(reference_output)) * reference_stride / fs
+                    fast_time = np.arange(len(fast_output)) * fast_stride / fs
+                    axis.plot(
+                        reference_time,
+                        reference_output,
+                        label=REFERENCE_SOLVER_MODE,
+                        linewidth=1.0,
+                    )
+                    axis.plot(
+                        fast_time,
+                        fast_output,
+                        label=FAST_SOLVER_MODE,
+                        linewidth=0.9,
+                        linestyle="--",
+                        alpha=0.85,
+                    )
+                else:
+                    output, output_stride = self._decimated(result.data["output"])
+                    t_out = np.arange(len(output)) * output_stride / fs
+                    axis.plot(
+                        t_out,
+                        output,
+                        label=r"$P_{out}(t)$",
+                        linewidth=0.9,
+                        alpha=0.85,
+                    )
                 axis.set_title(f"Ein- und Ausgangssignal – {result.preset_name}")
             axis.set_xlabel("Zeit [s]")
             axis.set_ylabel(r"$P_{out}$ [Pa]" if "reference_time_comparison" in result.data else "Amplitude")
@@ -1179,29 +1805,75 @@ class WDFSimulatorGUI(tk.Tk):
                 )
                 axis.set_axis_off()
             else:
-                trace, stride = self._decimated(result.data[trace_key])
-                time_s = np.arange(len(trace)) * stride / fs
-                axis.plot(time_s, scale * trace, linewidth=0.9)
+                if result.data.get("solver_mode") == COMPARE_SOLVER_MODE:
+                    reference_trace, reference_stride = self._decimated(
+                        result.data[f"reference_solver_{trace_key}"]
+                    )
+                    fast_trace, fast_stride = self._decimated(
+                        result.data[f"fast_solver_{trace_key}"]
+                    )
+                    reference_time = np.arange(len(reference_trace)) * reference_stride / fs
+                    fast_time = np.arange(len(fast_trace)) * fast_stride / fs
+                    axis.plot(
+                        reference_time,
+                        scale * reference_trace,
+                        label=REFERENCE_SOLVER_MODE,
+                        linewidth=1.0,
+                    )
+                    axis.plot(
+                        fast_time,
+                        scale * fast_trace,
+                        label=FAST_SOLVER_MODE,
+                        linestyle="--",
+                        linewidth=0.9,
+                    )
+                    axis.legend()
+                else:
+                    trace, stride = self._decimated(result.data[trace_key])
+                    time_s = np.arange(len(trace)) * stride / fs
+                    axis.plot(time_s, scale * trace, linewidth=0.9)
                 axis.set_title(f"{plot_kind} – {result.preset_name}")
                 axis.set_xlabel("Zeit [s]")
                 axis.set_ylabel(ylabel)
                 axis.grid(True, linestyle=":", alpha=0.7)
         else:
             axis = self.figure.add_subplot(111)
-            analysis = result.data["analysis"]
+
+            def calculate_spectrum(analysis_signal: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+                if plot_kind == "Leistungsdichtespektrum":
+                    if result.experiment == "two_tone":
+                        return wdf.compute_highres_psd_db(analysis_signal, fs)
+                    return wdf.compute_psd_db(analysis_signal, fs)
+                return wdf.compute_power_spectrum_db(analysis_signal, fs)
+
             if plot_kind == "Leistungsdichtespektrum":
-                if result.experiment == "two_tone":
-                    freqs, levels = wdf.compute_highres_psd_db(analysis, fs)
-                else:
-                    freqs, levels = wdf.compute_psd_db(analysis, fs)
                 ylabel = r"PSD von $P_{out}$ [dB/Hz]"
                 title = "Leistungsdichtespektrum des Ausgangsdrucks"
             else:
-                freqs, levels = wdf.compute_power_spectrum_db(analysis, fs)
                 ylabel = r"Leistung von $P_{out}$ [dB]"
                 title = "Leistungsspektrum des Ausgangsdrucks"
-            mask = (freqs > 0.0) & (freqs <= fs / 2.0)
-            axis.semilogx(freqs[mask], levels[mask], linewidth=0.9)
+
+            if result.data.get("solver_mode") == COMPARE_SOLVER_MODE:
+                for backend, label, linestyle in (
+                    ("reference", REFERENCE_SOLVER_MODE, "-"),
+                    ("fast", FAST_SOLVER_MODE, "--"),
+                ):
+                    freqs, levels = calculate_spectrum(
+                        result.data[f"{backend}_solver_analysis"]
+                    )
+                    mask = (freqs > 0.0) & (freqs <= fs / 2.0)
+                    axis.semilogx(
+                        freqs[mask],
+                        levels[mask],
+                        linewidth=0.9,
+                        linestyle=linestyle,
+                        label=label,
+                    )
+                axis.legend()
+            else:
+                freqs, levels = calculate_spectrum(result.data["analysis"])
+                mask = (freqs > 0.0) & (freqs <= fs / 2.0)
+                axis.semilogx(freqs[mask], levels[mask], linewidth=0.9)
             axis.set_title(f"{title} – {result.preset_name}")
             axis.set_xlabel("Frequenz [Hz]")
             axis.set_ylabel(ylabel)
