@@ -27,6 +27,7 @@ from scipy.io import wavfile
 import WDFSolverVPres as wdf
 import WDFSolverFast as wdf_fast
 import spectral_comparison as comparison
+import validation_export
 
 
 EXPERIMENTS = {
@@ -488,12 +489,15 @@ def _reference_comparison_data(
     if reference.quantity == "output_pressure_psd":
         start = max(0, int(round(float(settle_s) * fs)))
         reference_analysis = np.asarray(output[start:], dtype=float)
+        relevant_dynamic_range_db = 80.0
         spectral = comparison.compare_psd(
             reference_analysis,
             fs,
             reference,
+            relevant_dynamic_range_db=relevant_dynamic_range_db,
         )
         data["reference_psd_comparison"] = spectral
+        data["psd_relevant_dynamic_range_db"] = relevant_dynamic_range_db
         data["reference_frequency_hz"] = spectral.frequency_hz
         data["reference_psd_linear"] = spectral.reference_linear
         data["simulation_psd_linear_on_reference_grid"] = spectral.simulation_linear
@@ -897,6 +901,7 @@ class WDFSimulatorGUI(tk.Tk):
         self._messages: queue.Queue[tuple[str, Any]] = queue.Queue()
         self._worker: threading.Thread | None = None
         self.result: SimulationResult | None = None
+        self.result_config: dict[str, Any] | None = None
         self._parameter_rows: dict[str, tuple[ttk.Label, tk.Widget]] = {}
 
         self._create_variables()
@@ -1057,6 +1062,13 @@ class WDFSimulatorGUI(tk.Tk):
             export_frame, text="Daten speichern…", command=self._save_data, state=tk.DISABLED
         )
         self.save_data_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 3))
+        self.save_validation_button = ttk.Button(
+            export_frame,
+            text="Validierungspaket…",
+            command=self._save_validation_package,
+            state=tk.DISABLED,
+        )
+        self.save_validation_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=3)
         self.save_plot_button = ttk.Button(
             export_frame, text="Plot speichern…", command=self._save_plot, state=tk.DISABLED
         )
@@ -1286,11 +1298,13 @@ class WDFSimulatorGUI(tk.Tk):
         experiment = EXPERIMENTS[self.experiment_label.get()]
         if self.result is not None and self.result.experiment != experiment:
             self.result = None
+            self.result_config = None
             self.summary_text.set("Für die gewählte Untersuchung liegt noch kein Ergebnis vor.")
             self._set_result_details_text("Noch keine Ergebnisdetails verfügbar.")
             self._set_result_details_expanded(False)
             self.details_button.configure(state=tk.DISABLED)
             self.save_data_button.configure(state=tk.DISABLED)
+            self.save_validation_button.configure(state=tk.DISABLED)
             self.save_plot_button.configure(state=tk.DISABLED)
         rows = {
             "small_signal_reference": {"reference_path"},
@@ -1431,6 +1445,7 @@ class WDFSimulatorGUI(tk.Tk):
 
         self.run_button.configure(state=tk.DISABLED)
         self.save_data_button.configure(state=tk.DISABLED)
+        self.save_validation_button.configure(state=tk.DISABLED)
         self.save_plot_button.configure(state=tk.DISABLED)
         self.status_text.set("Simulation läuft … Die Oberfläche bleibt währenddessen bedienbar.")
         self.progress.start(10)
@@ -1440,7 +1455,7 @@ class WDFSimulatorGUI(tk.Tk):
     def _run_worker(self, config: dict[str, Any]) -> None:
         try:
             result = run_experiment(config)
-            self._messages.put(("result", result))
+            self._messages.put(("result", (result, dict(config))))
         except Exception:
             self._messages.put(("error", traceback.format_exc()))
 
@@ -1453,13 +1468,22 @@ class WDFSimulatorGUI(tk.Tk):
             self.progress.stop()
             self.run_button.configure(state=tk.NORMAL)
             if kind == "result":
-                self.result = payload
-                self.summary_text.set(self._format_result_brief(payload))
-                self._set_result_details_text(self._format_result_details(payload))
+                result, run_config = payload
+                self.result = result
+                self.result_config = run_config
+                self.summary_text.set(self._format_result_brief(result))
+                self._set_result_details_text(self._format_result_details(result))
                 self._set_result_details_expanded(False)
                 self.details_button.configure(state=tk.NORMAL)
                 self.status_text.set("Untersuchung erfolgreich abgeschlossen.")
                 self.save_data_button.configure(state=tk.NORMAL)
+                self.save_validation_button.configure(
+                    state=(
+                        tk.NORMAL
+                        if validation_export.can_export_validation_package(result)
+                        else tk.DISABLED
+                    )
+                )
                 self.save_plot_button.configure(state=tk.NORMAL)
                 self._redraw_result()
             else:
@@ -1917,6 +1941,46 @@ class WDFSimulatorGUI(tk.Tk):
         metadata_path = Path(path).with_suffix(".json")
         metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
         self.status_text.set(f"Ergebnis und Metadaten gespeichert: {path}")
+
+    def _save_validation_package(self) -> None:
+        """Speichert einen reproduzierbaren Messvergleich in einem eigenen Ordner."""
+        if self.result is None or self.result_config is None:
+            return
+        if not validation_export.can_export_validation_package(self.result):
+            messagebox.showerror(
+                "Validierungspaket nicht verfügbar",
+                "Ein Validierungspaket erfordert einen Messvergleich mit dem schnellen Solver.",
+                parent=self,
+            )
+            return
+
+        base_directory = filedialog.askdirectory(
+            title="Basisordner für das Validierungspaket auswählen",
+            mustexist=True,
+        )
+        if not base_directory:
+            return
+        try:
+            package_path = validation_export.export_validation_package(
+                self.result,
+                self.result_config,
+                base_directory,
+                figure=self.figure,
+            )
+        except Exception as exc:
+            messagebox.showerror(
+                "Validierungspaket konnte nicht gespeichert werden",
+                str(exc),
+                parent=self,
+            )
+            return
+
+        self.status_text.set(f"Validierungspaket gespeichert: {package_path}")
+        messagebox.showinfo(
+            "Validierungspaket gespeichert",
+            f"Der Validierungsfall wurde vollständig gespeichert:\n{package_path}",
+            parent=self,
+        )
 
     def _save_plot(self) -> None:
         path = filedialog.asksaveasfilename(

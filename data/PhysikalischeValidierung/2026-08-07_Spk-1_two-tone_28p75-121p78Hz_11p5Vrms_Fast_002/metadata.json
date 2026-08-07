@@ -1,0 +1,428 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-08-07T15:00:37+02:00",
+  "case_id": "Spk-1_two-tone_28p75-121p78Hz_11p5Vrms_Fast",
+  "validation_status": "evaluated_without_acceptance_threshold",
+  "experiment": "two_tone",
+  "preset_name": "Spk-1",
+  "fs_hz": 96000.0,
+  "summary": "Spk-1: Zweiton-Anregung bei 28.750 Hz und 121.780 Hz; A_in = 11.5 V, effektiver RMS-Pegel = 16.2635 V.",
+  "run_config": {
+    "experiment": "two_tone",
+    "preset_name": "Spk-1",
+    "solver_mode": "Schneller Python-Solver",
+    "fs": 96000.0,
+    "vrms": 11.5,
+    "input_level_mode": "Bernardini-Reproduktion (A_in * sqrt(2))",
+    "duration_s": 1.0,
+    "settle_s": 0.2,
+    "frequency_mode": "frei wählbar",
+    "freq_hz": 81.4,
+    "freq1_hz": 28.75,
+    "freq2_hz": 121.78,
+    "phase1_rad": 0.8472,
+    "phase2_rad": 2.2179,
+    "f_min_hz": 20.0,
+    "f_max_hz": 20000.0,
+    "frequency_points": 24,
+    "harmonics": 5,
+    "x_min_mm": -5.0,
+    "x_max_mm": 5.0,
+    "points": 801,
+    "signal_path": "",
+    "normalise_external": true,
+    "record_internal": true,
+    "reference_enabled": true,
+    "reference_path": "C:/Users/erikb/Downloads/data_to_epe_2026/data_to_epe_2026/fig7c/FSF122.02-8_multi_P_psd_meas.txt"
+  },
+  "model_parameters": {
+    "preset_name": "Spk-1",
+    "Re": 5.91,
+    "Mms": 0.038606,
+    "Rms": 2.814,
+    "Sd": 0.053913,
+    "resonance_hz": 57.5,
+    "Rcab": 18.7072,
+    "Ccab": 7.1487e-06,
+    "Ral": 3741.4,
+    "Bl_coeffs": [
+      13.854,
+      -7.7114,
+      -601905.7,
+      -1660400.0,
+      10107200000.0
+    ],
+    "Le_coeffs": [
+      0.0005470000000000001,
+      -0.0478768,
+      -11.3542,
+      1005.8000000000002,
+      113000.0
+    ],
+    "Kms_coeffs": [
+      4990.0,
+      -260710.2,
+      146605700.0,
+      -4966500000.0,
+      591900000000.0
+    ],
+    "xi_x": 0.9999,
+    "xi_Le": 0.9999,
+    "xi_Cms": 0.9999
+  },
+  "solver": {
+    "mode": "Schneller Python-Solver",
+    "primary_backend": "fast",
+    "fast_solver_version": "0.2.0",
+    "reference_solver_version": null
+  },
+  "software": {
+    "python": "3.14.4",
+    "numpy": "2.4.4",
+    "platform": "Windows-11-10.0.22631-SP0",
+    "python_executable": "C:\\Users\\erikb\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe"
+  },
+  "reference_files": [
+    {
+      "roles": [
+        "selected_reference"
+      ],
+      "source_path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig7c\\FSF122.02-8_multi_P_psd_meas.txt",
+      "archive_path": "references/FSF122.02-8_multi_P_psd_meas.txt",
+      "sha256": "9c4aadcceaa075dcd349159acb3a6c9c525b2cc5718dd54b5f35c4e50745bf7b"
+    },
+    {
+      "roles": [
+        "time_reference"
+      ],
+      "source_path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig7a\\FSF122.02-8_multi_P_meas.txt",
+      "archive_path": "references/FSF122.02-8_multi_P_meas.txt",
+      "sha256": "5cf55f0b1bf2e147ec90a57a288f7913ddb2bee9779968be24cb9c5e63df697f"
+    }
+  ],
+  "reference_metadata": {
+    "path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig7c\\FSF122.02-8_multi_P_psd_meas.txt",
+    "figure": "7c",
+    "preset_name": "Spk-1",
+    "speaker_model": "FSF122.02-8",
+    "source_type": "measurement",
+    "experiment": "two_tone",
+    "quantity": "output_pressure_psd",
+    "domain": "frequency",
+    "x_unit": "Hz",
+    "value_unit": "Pa^2/Hz",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1.0,
+    "fs_hz": 96000.0,
+    "expected_vrms": 11.5,
+    "expected_frequencies_hz": [
+      28.75,
+      121.78
+    ],
+    "expected_phases_rad": [
+      0.8472,
+      2.2179
+    ],
+    "notes": [],
+    "psd_config": {
+      "window": "hamming",
+      "segment_length": 19200,
+      "overlap": 9600,
+      "nfft": 19200,
+      "detrend": false,
+      "scaling": "density",
+      "confirmed_properties": [
+        "Hamming-Fenster und Segmentlaenge gleich FFT-Laenge stimmen mit dem Leakage-Muster mehrerer Grundtoene in Fig. 6(c), 7(c) und 7(d) ueberein"
+      ],
+      "assumptions": [
+        "50 % Segmentueberlappung angenommen",
+        "Kein Detrending angenommen"
+      ]
+    }
+  },
+  "time_reference_metadata": {
+    "path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig7a\\FSF122.02-8_multi_P_meas.txt",
+    "figure": "7a",
+    "preset_name": "Spk-1",
+    "speaker_model": "FSF122.02-8",
+    "source_type": "measurement",
+    "experiment": "two_tone",
+    "quantity": "output_pressure",
+    "domain": "time",
+    "x_unit": "s",
+    "value_unit": "Pa",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1.0,
+    "fs_hz": 96000.0,
+    "expected_vrms": null,
+    "expected_frequencies_hz": [
+      28.75,
+      121.78
+    ],
+    "expected_phases_rad": [
+      0.8472,
+      2.2179
+    ],
+    "notes": [
+      "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+    ]
+  },
+  "metrics": [
+    {
+      "metric": "rmse",
+      "value": 0.9598716510863086,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "reference_rms",
+      "value": 20.38521904709664,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "absolute_nrmse",
+      "value": 0.047086648854186244,
+      "unit": "1",
+      "scope": "time",
+      "definition": "||P_sim-P_meas||_2 / ||P_meas||_2"
+    },
+    {
+      "metric": "ac_rmse",
+      "value": 0.29804172503689247,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "ac_reference_rms",
+      "value": 20.357767472832077,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "ac_nrmse",
+      "value": 0.014640196938816411,
+      "unit": "1",
+      "scope": "time",
+      "definition": "||AC(P_sim)-AC(P_meas)||_2 / ||AC(P_meas)||_2"
+    },
+    {
+      "metric": "alignment_integer_start",
+      "value": 39117,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_fractional_offset",
+      "value": 0.37596345887988647,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_start",
+      "value": 39117.37596345888,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_correlation",
+      "value": 0.9998937982402212,
+      "unit": "1",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "comparison_samples",
+      "value": 6720,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "comparison_duration",
+      "value": 0.06999999999999999,
+      "unit": "s",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "frequency_points",
+      "value": 9601,
+      "unit": "points",
+      "scope": "spectrum",
+      "definition": ""
+    },
+    {
+      "metric": "relevant_frequency_points",
+      "value": 188,
+      "unit": "points",
+      "scope": "spectrum",
+      "definition": ""
+    },
+    {
+      "metric": "relevant_dynamic_range",
+      "value": 80.0,
+      "unit": "dB",
+      "scope": "spectrum",
+      "definition": "Frequenzpunkte mit Referenz-PSD innerhalb dieses Bereichs unterhalb des Maximums"
+    },
+    {
+      "metric": "spectral_rmse",
+      "value": 10.509857045344608,
+      "unit": "dB",
+      "scope": "spectrum",
+      "definition": ""
+    },
+    {
+      "metric": "spectral_mean_difference",
+      "value": 8.802328944265076,
+      "unit": "dB",
+      "scope": "spectrum",
+      "definition": ""
+    },
+    {
+      "metric": "spectral_maximum_absolute_difference",
+      "value": 19.507172302948383,
+      "unit": "dB",
+      "scope": "spectrum",
+      "definition": ""
+    }
+  ],
+  "result_metadata": {
+    "f1_hz": 28.75,
+    "f2_hz": 121.78,
+    "input_level_mode": "Bernardini-Reproduktion (A_in * sqrt(2))",
+    "input_level_scale_factor": 1.4142135623730951,
+    "nominal_input_level_vrms": 11.5,
+    "effective_input_level_vrms": 16.263455967290593,
+    "solver_mode": "Schneller Python-Solver",
+    "primary_solver_backend": "fast",
+    "fast_solver_time_s": 0.33730060001835227,
+    "reference_metadata": {
+      "path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig7c\\FSF122.02-8_multi_P_psd_meas.txt",
+      "figure": "7c",
+      "preset_name": "Spk-1",
+      "speaker_model": "FSF122.02-8",
+      "source_type": "measurement",
+      "experiment": "two_tone",
+      "quantity": "output_pressure_psd",
+      "domain": "frequency",
+      "x_unit": "Hz",
+      "value_unit": "Pa^2/Hz",
+      "value_scale": "linear",
+      "applied_value_scale_factor": 1.0,
+      "fs_hz": 96000.0,
+      "expected_vrms": 11.5,
+      "expected_frequencies_hz": [
+        28.75,
+        121.78
+      ],
+      "expected_phases_rad": [
+        0.8472,
+        2.2179
+      ],
+      "notes": [],
+      "psd_config": {
+        "window": "hamming",
+        "segment_length": 19200,
+        "overlap": 9600,
+        "nfft": 19200,
+        "detrend": false,
+        "scaling": "density",
+        "confirmed_properties": [
+          "Hamming-Fenster und Segmentlaenge gleich FFT-Laenge stimmen mit dem Leakage-Muster mehrerer Grundtoene in Fig. 6(c), 7(c) und 7(d) ueberein"
+        ],
+        "assumptions": [
+          "50 % Segmentueberlappung angenommen",
+          "Kein Detrending angenommen"
+        ]
+      }
+    },
+    "psd_relevant_dynamic_range_db": 80.0,
+    "time_reference_metadata": {
+      "path": "C:\\Users\\erikb\\Downloads\\data_to_epe_2026\\data_to_epe_2026\\fig7a\\FSF122.02-8_multi_P_meas.txt",
+      "figure": "7a",
+      "preset_name": "Spk-1",
+      "speaker_model": "FSF122.02-8",
+      "source_type": "measurement",
+      "experiment": "two_tone",
+      "quantity": "output_pressure",
+      "domain": "time",
+      "x_unit": "s",
+      "value_unit": "Pa",
+      "value_scale": "linear",
+      "applied_value_scale_factor": 1.0,
+      "fs_hz": 96000.0,
+      "expected_vrms": null,
+      "expected_frequencies_hz": [
+        28.75,
+        121.78
+      ],
+      "expected_phases_rad": [
+        0.8472,
+        2.2179
+      ],
+      "notes": [
+        "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+      ]
+    },
+    "time_rmse_pa": 0.9598716510863086,
+    "time_reference_rms_pa": 20.38521904709664,
+    "time_nrmse_relative_rms": 0.047086648854186244,
+    "time_ac_rmse_pa": 0.29804172503689247,
+    "time_ac_reference_rms_pa": 20.357767472832077,
+    "time_ac_nrmse_relative_rms": 0.014640196938816411,
+    "time_comparison_samples": 6720,
+    "time_comparison_duration_s": 0.06999999999999999,
+    "alignment_start_integer_sample": 39117,
+    "alignment_fractional_offset_samples": 0.37596345887988647,
+    "alignment_start_sample": 39117.37596345888,
+    "alignment_start_s": 0.40747266628602996,
+    "alignment_correlation": 0.9998937982402212,
+    "nrmse_definition": "||P_sim - P_meas||_2 / ||P_meas||_2",
+    "ac_nrmse_definition": "||(P_sim-mean(P_sim)) - (P_meas-mean(P_meas))||_2 / ||P_meas-mean(P_meas)||_2",
+    "reference_notice": "Referenz Fig. 7c: identisches Frequenzraster. Bestätigt: Hamming-Fenster und Segmentlaenge gleich FFT-Laenge stimmen mit dem Leakage-Muster mehrerer Grundtoene in Fig. 6(c), 7(c) und 7(d) ueberein. Noch unbestätigt: 50 % Segmentueberlappung angenommen; Kein Detrending angenommen. Zeitreferenz Fig. 7a, Spalte „11.5 V RMS“; der Simulationsausschnitt wurde per normierter Kreuzkorrelation und Subsample-Korrektur ausschließlich zeitlich ausgerichtet. Absoluter NRMSE = 0.0470866 (4.709 %); AC-NRMSE = 0.0146402 (1.464 %); N = 6720, Simulationsstart = 39117.376 Samples (407.473 ms)."
+  },
+  "array_keys": [
+    "analysis",
+    "diaphragm_velocity",
+    "displacement",
+    "experiment",
+    "fs_hz",
+    "input",
+    "output",
+    "preset_name",
+    "psd_difference_db",
+    "reference_frequency_hz",
+    "reference_output_pressure",
+    "reference_psd_linear",
+    "reference_time_s",
+    "simulation_output_pressure_aligned",
+    "simulation_psd_linear_on_reference_grid",
+    "voice_coil_current",
+    "volume_velocity"
+  ],
+  "files": [
+    "comparison_plot.pdf",
+    "metadata.json",
+    "metrics.csv",
+    "references/FSF122.02-8_multi_P_meas.txt",
+    "references/FSF122.02-8_multi_P_psd_meas.txt",
+    "simulation_raw.npz",
+    "spectrum_comparison.csv",
+    "time_comparison.csv"
+  ],
+  "notes": [
+    "Originalreferenzen wurden bytegetreu kopiert und mit SHA-256 dokumentiert.",
+    "Zeitdaten sind ausschliesslich zeitlich ausgerichtet; es erfolgt keine multiplikative Pegelanpassung.",
+    "Spektraldaten liegen auf dem Frequenzraster der ausgewaehlten Referenzdatei.",
+    "Es wurde kein automatisches Bestehenskriterium angewendet."
+  ]
+}

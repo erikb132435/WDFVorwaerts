@@ -1,0 +1,14 @@
+# Plattformunabhaengige Zeilenenden fuer Quell- und Dokumentationsdateien.
+*.py   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+
+# Binaerformate duerfen von Git nicht normalisiert werden.
+*.npz binary
+*.npy binary
+*.wav binary
+*.pdf binary
+
+# Archivierte Originalreferenzen muessen fuer reproduzierbare SHA-256-Pruefsummen
+# bytegenau erhalten bleiben, einschliesslich ihrer urspruenglichen Zeilenenden.
+data/**/references/*.txt -text

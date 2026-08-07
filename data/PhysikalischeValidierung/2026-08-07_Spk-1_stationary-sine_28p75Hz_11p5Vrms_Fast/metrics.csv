@@ -1,0 +1,13 @@
+metric,value,unit,scope,definition
+rmse,1.139118000521921,Pa,time,
+reference_rms,21.884017511245776,Pa,time,
+absolute_nrmse,0.05205250818029871,1,time,||P_sim-P_meas||_2 / ||P_meas||_2
+ac_rmse,0.4280513406556252,Pa,time,
+ac_reference_rms,21.848497705043435,Pa,time,
+ac_nrmse,0.019591797405677704,1,time,||AC(P_sim)-AC(P_meas)||_2 / ||AC(P_meas)||_2
+alignment_integer_start,19255,samples,time,
+alignment_fractional_offset,0.06464794940585099,samples,time,
+alignment_start,19255.064647949406,samples,time,
+alignment_correlation,0.999808064073738,1,time,
+comparison_samples,6720,samples,time,
+comparison_duration,0.06999999999999999,s,time,

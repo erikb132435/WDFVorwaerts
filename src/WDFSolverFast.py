@@ -263,7 +263,7 @@ class FastBernardiniSpeakerSolver:
             bl_squared = bl * bl
             denominator = bl_squared + z1 * z3 * sd_squared + z1 * z2
             rho = 1.0 / denominator
-
+            
             # Nichtreziproke 3-Port-Root, Gl. (8) bei Bernardini et al.
             a6 = rho * (
                 (bl_squared - z1 * z3 * sd_squared - z1 * z2) * b6
