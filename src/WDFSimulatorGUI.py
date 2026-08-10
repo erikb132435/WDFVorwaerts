@@ -26,6 +26,7 @@ from scipy.io import wavfile
 
 import WDFSolverVPres as wdf
 import WDFSolverFast as wdf_fast
+import RealtimeWDFEngine as realtime
 import spectral_comparison as comparison
 import validation_export
 
@@ -78,6 +79,11 @@ INPUT_LEVEL_MODES = {
     STANDARD_INPUT_LEVEL_MODE: 1.0,
     BERNARDINI_INPUT_LEVEL_MODE: float(np.sqrt(2.0)),
 }
+REALTIME_OUTPUT_STORAGE_MODES = {
+    "RAM-Puffer (nach Test speichern)": "memory",
+    "Dateibasierter Memmap-Puffer": "memmap",
+}
+DEFAULT_REALTIME_OUTPUT_STORAGE_MODE = "RAM-Puffer (nach Test speichern)"
 
 REFERENCE_SOLVER_MODE = "Referenzsolver"
 FAST_SOLVER_MODE = "Schneller Python-Solver"
@@ -900,14 +906,19 @@ class WDFSimulatorGUI(tk.Tk):
 
         self._messages: queue.Queue[tuple[str, Any]] = queue.Queue()
         self._worker: threading.Thread | None = None
+        self._realtime_messages: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self._realtime_worker: threading.Thread | None = None
+        self._realtime_cancel_event = threading.Event()
         self.result: SimulationResult | None = None
         self.result_config: dict[str, Any] | None = None
+        self.realtime_statistics: realtime.RealtimeStatistics | None = None
         self._parameter_rows: dict[str, tuple[ttk.Label, tk.Widget]] = {}
 
         self._create_variables()
         self._create_layout()
         self._experiment_changed()
         self.after(100, self._poll_worker)
+        self.after(100, self._poll_realtime_worker)
 
     def _create_variables(self) -> None:
         self.experiment_label = tk.StringVar(value="Stationäre Sinusanregung")
@@ -941,8 +952,35 @@ class WDFSimulatorGUI(tk.Tk):
         self.summary_text = tk.StringVar(value="Noch keine Untersuchung ausgeführt.")
         self._details_expanded = False
 
+        self.realtime_signal_path = tk.StringVar(value="")
+        self.realtime_preset_name = tk.StringVar(value="Spk-2")
+        self.realtime_block_size = tk.StringVar(value="128")
+        self.realtime_nominal_vrms = tk.StringVar(value="3.0")
+        self.realtime_input_level_mode = tk.StringVar(value=STANDARD_INPUT_LEVEL_MODE)
+        self.realtime_maximum_duration_s = tk.StringVar(value="")
+        self.realtime_paced = tk.BooleanVar(value=True)
+        self.realtime_disable_gc = tk.BooleanVar(value=False)
+        self.realtime_output_storage_mode = tk.StringVar(
+            value=DEFAULT_REALTIME_OUTPUT_STORAGE_MODE
+        )
+        self.realtime_write_monitor = tk.BooleanVar(value=True)
+        self.realtime_output_root = tk.StringVar(
+            value=str((Path.cwd() / "data" / "RealtimeTests").resolve())
+        )
+        self.realtime_status_text = tk.StringVar(value="Bereit für einen virtuellen Echtzeittest.")
+        self.realtime_summary_text = tk.StringVar(
+            value="Noch kein blockweiser Echtzeittest ausgeführt."
+        )
+
     def _create_layout(self) -> None:
-        outer = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill=tk.BOTH, expand=True)
+        simulation_tab = ttk.Frame(notebook)
+        realtime_tab = ttk.Frame(notebook)
+        notebook.add(simulation_tab, text="Wissenschaftliche Simulation")
+        notebook.add(realtime_tab, text="Virtueller Echtzeittest")
+
+        outer = ttk.Panedwindow(simulation_tab, orient=tk.HORIZONTAL)
         outer.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         controls = ttk.Frame(outer, padding=8)
@@ -1130,6 +1168,197 @@ class WDFSimulatorGUI(tk.Tk):
         axis.text(0.5, 0.5, "Untersuchung konfigurieren und ausführen", ha="center", va="center")
         axis.set_axis_off()
         self.canvas.draw_idle()
+
+        self._create_realtime_layout(realtime_tab)
+
+    def _create_realtime_layout(self, parent: ttk.Frame) -> None:
+        outer = ttk.Panedwindow(parent, orient=tk.HORIZONTAL)
+        outer.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        controls = ttk.Frame(outer, padding=8)
+        result_area = ttk.Frame(outer, padding=4)
+        outer.add(controls, weight=0)
+        outer.add(result_area, weight=1)
+
+        ttk.Label(
+            controls,
+            text="Virtuelles WAV-Streaming",
+            font=("TkDefaultFont", 11, "bold"),
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 5))
+        ttk.Label(
+            controls,
+            text=(
+                "Der Fast Solver wird blockweise und optional in realer Zeit getaktet. "
+                "Dies ist noch kein Audiointerface-Callback."
+            ),
+            wraplength=360,
+            justify=tk.LEFT,
+        ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 12))
+
+        row = 2
+
+        def add_label(text: str) -> None:
+            nonlocal row
+            ttk.Label(controls, text=text).grid(row=row, column=0, sticky="w", pady=3)
+
+        add_label("WAV-Eingang")
+        signal_holder = ttk.Frame(controls)
+        signal_holder.grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
+        ttk.Entry(signal_holder, textvariable=self.realtime_signal_path, width=26).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        ttk.Button(
+            signal_holder, text="…", width=3, command=self._choose_realtime_signal_file
+        ).pack(side=tk.LEFT, padx=(4, 0))
+        row += 1
+
+        add_label("Lautsprechermodell")
+        ttk.Combobox(
+            controls,
+            textvariable=self.realtime_preset_name,
+            values=tuple(wdf.BERNARDINI_PRESETS),
+            state="readonly",
+        ).grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
+        row += 1
+
+        add_label("Blockgröße [Samples]")
+        ttk.Combobox(
+            controls,
+            textvariable=self.realtime_block_size,
+            values=(32, 64, 128, 256, 512, 1024),
+        ).grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
+        row += 1
+
+        add_label("Nennpegel A_in [V]")
+        ttk.Entry(controls, textvariable=self.realtime_nominal_vrms).grid(
+            row=row, column=1, columnspan=2, sticky="ew", pady=3
+        )
+        row += 1
+
+        add_label("Pegelkonvention")
+        ttk.Combobox(
+            controls,
+            textvariable=self.realtime_input_level_mode,
+            values=tuple(INPUT_LEVEL_MODES),
+            state="readonly",
+        ).grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
+        row += 1
+
+        add_label("Maximale Dauer [s]")
+        ttk.Entry(controls, textvariable=self.realtime_maximum_duration_s).grid(
+            row=row, column=1, columnspan=2, sticky="ew", pady=3
+        )
+        row += 1
+        ttk.Label(
+            controls,
+            text="Leer = gesamte WAV-Datei",
+            foreground="#555555",
+        ).grid(row=row, column=1, columnspan=2, sticky="w", pady=(0, 5))
+        row += 1
+
+        ttk.Checkbutton(
+            controls,
+            text="An reale Blockzeit takten",
+            variable=self.realtime_paced,
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=2)
+        row += 1
+        ttk.Checkbutton(
+            controls,
+            text="Garbage Collector während Streaming deaktivieren",
+            variable=self.realtime_disable_gc,
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=2)
+        row += 1
+
+        add_label("Ausgabepuffer")
+        ttk.Combobox(
+            controls,
+            textvariable=self.realtime_output_storage_mode,
+            values=tuple(REALTIME_OUTPUT_STORAGE_MODES),
+            state="readonly",
+        ).grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
+        row += 1
+        ttk.Label(
+            controls,
+            text="RAM trennt die Blockmessung vom dateibasierten Ausgang.",
+            foreground="#555555",
+            wraplength=350,
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(0, 5))
+        row += 1
+
+        ttk.Checkbutton(
+            controls,
+            text="Normalisierte Monitor-WAV erzeugen",
+            variable=self.realtime_write_monitor,
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=2)
+        row += 1
+
+        ttk.Separator(controls).grid(row=row, column=0, columnspan=3, sticky="ew", pady=10)
+        row += 1
+        add_label("Ausgabe-Basisordner")
+        output_holder = ttk.Frame(controls)
+        output_holder.grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
+        ttk.Entry(output_holder, textvariable=self.realtime_output_root, width=26).pack(
+            side=tk.LEFT, fill=tk.X, expand=True
+        )
+        ttk.Button(
+            output_holder, text="…", width=3, command=self._choose_realtime_output_root
+        ).pack(side=tk.LEFT, padx=(4, 0))
+        row += 1
+
+        button_frame = ttk.Frame(controls)
+        button_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=(14, 5))
+        self.realtime_start_button = ttk.Button(
+            button_frame,
+            text="Echtzeittest starten",
+            command=self._start_realtime_run,
+        )
+        self.realtime_start_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 3))
+        self.realtime_cancel_button = ttk.Button(
+            button_frame,
+            text="Abbrechen",
+            command=self._cancel_realtime_run,
+            state=tk.DISABLED,
+        )
+        self.realtime_cancel_button.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(3, 0))
+        row += 1
+
+        self.realtime_progress = ttk.Progressbar(controls, mode="determinate", maximum=1.0)
+        self.realtime_progress.grid(row=row, column=0, columnspan=3, sticky="ew", pady=3)
+        row += 1
+        ttk.Label(
+            controls,
+            textvariable=self.realtime_status_text,
+            wraplength=360,
+            justify=tk.LEFT,
+        ).grid(row=row, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        controls.columnconfigure(1, weight=1)
+
+        summary = ttk.LabelFrame(result_area, text="Echtzeitstatistik", padding=8)
+        summary.pack(side=tk.BOTTOM, fill=tk.X, pady=(7, 0))
+        ttk.Label(
+            summary,
+            textvariable=self.realtime_summary_text,
+            wraplength=760,
+            justify=tk.LEFT,
+        ).pack(fill=tk.X, anchor="w")
+
+        self.realtime_figure = Figure(figsize=(8, 6), dpi=100, constrained_layout=True)
+        self.realtime_canvas = FigureCanvasTkAgg(self.realtime_figure, master=result_area)
+        realtime_toolbar = NavigationToolbar2Tk(
+            self.realtime_canvas, result_area, pack_toolbar=False
+        )
+        realtime_toolbar.update()
+        realtime_toolbar.pack(side=tk.TOP, fill=tk.X)
+        self.realtime_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        axis = self.realtime_figure.add_subplot(111)
+        axis.text(
+            0.5,
+            0.5,
+            "WAV-Datei wählen und virtuellen Echtzeittest starten",
+            ha="center",
+            va="center",
+        )
+        axis.set_axis_off()
+        self.realtime_canvas.draw_idle()
 
     def _set_result_details_text(self, text: str) -> None:
         self.details_widget.configure(state=tk.NORMAL)
@@ -1364,6 +1593,321 @@ class WDFSimulatorGUI(tk.Tk):
         )
         if selected:
             self.signal_path.set(selected)
+
+    def _choose_realtime_signal_file(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="WAV-Eingang für den virtuellen Echtzeittest auswählen",
+            filetypes=[("WAV-Audiodatei", "*.wav")],
+        )
+        if selected:
+            self.realtime_signal_path.set(selected)
+
+    def _choose_realtime_output_root(self) -> None:
+        selected = filedialog.askdirectory(
+            title="Basisordner für Echtzeittests auswählen",
+            mustexist=True,
+        )
+        if selected:
+            self.realtime_output_root.set(selected)
+
+    def _collect_realtime_run(self) -> tuple[Path, str, realtime.VirtualRealtimeConfig, Path]:
+        input_path = Path(self.realtime_signal_path.get()).expanduser().resolve()
+        if not input_path.is_file():
+            raise ValueError("Bitte eine vorhandene WAV-Eingangsdatei auswählen.")
+        if input_path.suffix.lower() != ".wav":
+            raise ValueError("Der virtuelle Echtzeittest unterstützt ausschließlich WAV-Dateien.")
+
+        preset_name = self.realtime_preset_name.get()
+        if preset_name not in wdf.BERNARDINI_PRESETS:
+            raise ValueError(f"Unbekanntes Lautsprecherpreset: {preset_name}")
+        block_size = int(self.realtime_block_size.get())
+        nominal_vrms = float(self.realtime_nominal_vrms.get())
+        if not np.isfinite(nominal_vrms) or nominal_vrms <= 0.0:
+            raise ValueError("Der Nennpegel muss positiv und endlich sein.")
+        level_mode = self.realtime_input_level_mode.get()
+        if level_mode not in INPUT_LEVEL_MODES:
+            raise ValueError(f"Unbekannte Pegelkonvention: {level_mode}")
+        effective_vrms = nominal_vrms * INPUT_LEVEL_MODES[level_mode]
+
+        duration_text = self.realtime_maximum_duration_s.get().strip()
+        maximum_duration_s = float(duration_text) if duration_text else None
+        storage_label = self.realtime_output_storage_mode.get()
+        if storage_label not in REALTIME_OUTPUT_STORAGE_MODES:
+            raise ValueError(f"Unbekannter Ausgabepuffer: {storage_label}")
+        config = realtime.VirtualRealtimeConfig(
+            block_size=block_size,
+            target_rms_voltage=effective_vrms,
+            paced=bool(self.realtime_paced.get()),
+            maximum_duration_s=maximum_duration_s,
+            disable_gc_during_stream=bool(self.realtime_disable_gc.get()),
+            write_monitor_wav=bool(self.realtime_write_monitor.get()),
+            output_storage_mode=REALTIME_OUTPUT_STORAGE_MODES[storage_label],
+        )
+        config.validate()
+
+        output_root_text = self.realtime_output_root.get().strip()
+        if not output_root_text:
+            raise ValueError("Bitte einen Ausgabe-Basisordner angeben.")
+        output_root = Path(output_root_text).expanduser().resolve()
+        return input_path, preset_name, config, output_root
+
+    def _start_realtime_run(self) -> None:
+        if self._realtime_worker is not None and self._realtime_worker.is_alive():
+            return
+        try:
+            input_path, preset_name, config, output_root = self._collect_realtime_run()
+            output_directory = realtime.create_unique_run_directory(
+                output_root,
+                input_path,
+                preset_name,
+                config.block_size,
+            )
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Ungültige Echtzeitkonfiguration", str(exc), parent=self)
+            return
+
+        self.realtime_statistics = None
+        self._realtime_cancel_event.clear()
+        self.realtime_start_button.configure(state=tk.DISABLED)
+        self.realtime_cancel_button.configure(state=tk.NORMAL)
+        self.realtime_progress.configure(value=0.0, maximum=1.0)
+        self.realtime_status_text.set(
+            f"Blockweiser Test läuft mit {config.block_size} Samples; "
+            f"effektiver Eingang {config.target_rms_voltage:.6g} V RMS; "
+            f"Ausgabepuffer {config.output_storage_mode}."
+        )
+        self.realtime_summary_text.set("Initialisierung und RMS-Analyse der WAV-Datei …")
+        self._realtime_worker = threading.Thread(
+            target=self._run_realtime_worker,
+            args=(input_path, preset_name, config, output_directory),
+            daemon=True,
+        )
+        self._realtime_worker.start()
+
+    def _run_realtime_worker(
+        self,
+        input_path: Path,
+        preset_name: str,
+        config: realtime.VirtualRealtimeConfig,
+        output_directory: Path,
+    ) -> None:
+        def report(progress: realtime.RealtimeProgress) -> None:
+            self._realtime_messages.put(("progress", progress))
+
+        result = None
+        try:
+            result = realtime.run_virtual_realtime_wav(
+                input_path,
+                preset_name,
+                config=config,
+                output_directory=output_directory,
+                cancel_event=self._realtime_cancel_event,
+                progress_callback=report,
+            )
+            payload = {
+                "statistics": result.statistics,
+                "output_directory": output_directory,
+                "input_rms_voltage": result.input_rms_voltage,
+                "voltage_gain": result.voltage_gain,
+                "paced": config.paced,
+                "output_storage_mode": result.output_storage_mode,
+            }
+            self._realtime_messages.put(("result", payload))
+        except realtime.RealtimeRunCancelled as exc:
+            try:
+                output_directory.rmdir()
+            except OSError:
+                pass
+            self._realtime_messages.put(("cancelled", str(exc)))
+        except Exception:
+            self._realtime_messages.put(("error", traceback.format_exc()))
+        finally:
+            if result is not None:
+                result.close()
+
+    def _cancel_realtime_run(self) -> None:
+        if self._realtime_worker is None or not self._realtime_worker.is_alive():
+            return
+        self._realtime_cancel_event.set()
+        self.realtime_cancel_button.configure(state=tk.DISABLED)
+        self.realtime_status_text.set("Abbruch angefordert; der aktuelle Block wird beendet …")
+
+    @staticmethod
+    def _format_realtime_summary(
+        statistics: realtime.RealtimeStatistics,
+        input_rms_voltage: float,
+        output_directory: Path,
+        paced: bool,
+        output_storage_mode: str | None = None,
+    ) -> str:
+        values = statistics.summary()
+        deadline_us = 1e6 * statistics.block_size / statistics.fs_hz
+        return "\n".join(
+            (
+                f"{statistics.fs_hz:g} Hz · {statistics.block_size} Samples · "
+                f"Blockfrist {deadline_us:.3f} µs · Eingang {input_rms_voltage:.6g} V RMS",
+                f"Kernel: Median {values['kernel']['median_us']:.3f} µs, "
+                f"P99 {values['kernel']['p99_us']:.3f} µs, "
+                f"Maximum {values['kernel']['max_us']:.3f} µs",
+                f"Gesamtblock: Median {values['total_block']['median_us']:.3f} µs, "
+                f"P99 {values['total_block']['p99_us']:.3f} µs, "
+                f"Maximum {values['total_block']['max_us']:.3f} µs",
+                f"Relative Kernel-Threadarbeit ({values['kernel_thread_work']['unit']}): "
+                f"P99/Median {values['kernel_thread_work']['p99_over_median']:.3f}, "
+                f"Maximum/Median {values['kernel_thread_work']['max_over_median']:.3f}",
+                f"Deadline-Verletzungen: Kernel {values['kernel_deadline_misses']}, "
+                f"Gesamtverarbeitung {values['total_processing_deadline_misses']}, "
+                f"inkl. Taktjitter {values['scheduled_deadline_misses']} "
+                f"({'getaktet' if paced else 'ungetaktet'})",
+                f"Ausgabepuffer: {output_storage_mode or 'nicht angegeben'} · "
+                f"Ergebnisse: {output_directory}",
+            )
+        )
+
+    def _draw_realtime_statistics(self, statistics: realtime.RealtimeStatistics) -> None:
+        self.realtime_figure.clear()
+        axes = self.realtime_figure.subplots(
+            3,
+            1,
+            sharex=True,
+            gridspec_kw={"height_ratios": [3, 1, 1]},
+        )
+        stride = max(1, int(np.ceil(statistics.block_count / 6000)))
+        indices = np.arange(statistics.block_count)[::stride]
+        time_s = indices * statistics.block_size / statistics.fs_hz
+        axes[0].plot(
+            time_s,
+            1e6 * statistics.kernel_times_s[::stride],
+            label="WDF-Kernel (Wandzeit)",
+            linewidth=0.8,
+        )
+        axes[0].plot(
+            time_s,
+            1e6 * statistics.total_block_times_s[::stride],
+            label="Gesamte Blockverarbeitung",
+            linewidth=0.8,
+            alpha=0.85,
+        )
+        axes[0].plot(
+            time_s,
+            1e6 * statistics.block_deadlines_s[::stride],
+            label="Blockfrist",
+            color="black",
+            linestyle="--",
+            linewidth=0.9,
+        )
+        missed = np.flatnonzero(statistics.scheduled_deadline_misses)
+        if missed.size:
+            shown = missed[:: max(1, int(np.ceil(len(missed) / 2000)))]
+            axes[0].scatter(
+                shown * statistics.block_size / statistics.fs_hz,
+                1e6 * statistics.total_block_times_s[shown],
+                color="tab:red",
+                s=12,
+                label="Deadline verfehlt",
+                zorder=4,
+            )
+        axes[0].set_ylabel("Blockzeit [µs]")
+        axes[0].set_title("Virtueller Echtzeittest des Fast Solvers")
+        axes[0].grid(True, linestyle=":", alpha=0.7)
+        axes[0].legend()
+
+        axes[1].plot(
+            time_s,
+            1e6 * statistics.release_lateness_s[::stride],
+            color="tab:orange",
+            linewidth=0.8,
+        )
+        axes[1].set_ylabel("Startjitter [µs]")
+        axes[1].grid(True, linestyle=":", alpha=0.7)
+
+        wall_median = float(np.median(statistics.kernel_times_s))
+        work_median = float(np.median(statistics.kernel_thread_work))
+        relative_wall = (
+            statistics.kernel_times_s / wall_median
+            if wall_median > 0.0
+            else np.zeros_like(statistics.kernel_times_s)
+        )
+        relative_work = (
+            statistics.kernel_thread_work / work_median
+            if work_median > 0.0
+            else np.zeros_like(statistics.kernel_thread_work)
+        )
+        axes[2].plot(
+            time_s,
+            relative_wall[::stride],
+            color="tab:purple",
+            linewidth=0.8,
+            label="Kernel-Wandzeit",
+        )
+        axes[2].plot(
+            time_s,
+            relative_work[::stride],
+            color="tab:green",
+            linewidth=0.8,
+            alpha=0.85,
+            label=f"Threadarbeit [{statistics.thread_work_unit}]",
+        )
+        axes[2].set_xlabel("Signalzeit [s]")
+        axes[2].set_ylabel("relativ zum Median")
+        axes[2].grid(True, linestyle=":", alpha=0.7)
+        axes[2].legend()
+        self.realtime_canvas.draw_idle()
+
+    def _poll_realtime_worker(self) -> None:
+        try:
+            while True:
+                kind, payload = self._realtime_messages.get_nowait()
+                if kind == "progress":
+                    progress = payload
+                    self.realtime_progress.configure(
+                        maximum=max(1, progress.total_blocks),
+                        value=progress.completed_blocks,
+                    )
+                    self.realtime_summary_text.set(
+                        f"Block {progress.completed_blocks}/{progress.total_blocks} · "
+                        f"Kernel zuletzt {progress.latest_kernel_us:.3f} µs · "
+                        f"Gesamt zuletzt {progress.latest_total_processing_us:.3f} µs · "
+                        f"Deadline-Verletzungen {progress.scheduled_deadline_misses}"
+                    )
+                elif kind == "result":
+                    statistics = payload["statistics"]
+                    self.realtime_statistics = statistics
+                    self.realtime_progress.configure(
+                        maximum=max(1, statistics.block_count),
+                        value=statistics.block_count,
+                    )
+                    self.realtime_summary_text.set(
+                        self._format_realtime_summary(
+                            statistics,
+                            payload["input_rms_voltage"],
+                            payload["output_directory"],
+                            payload["paced"],
+                            payload["output_storage_mode"],
+                        )
+                    )
+                    self.realtime_status_text.set("Virtueller Echtzeittest abgeschlossen.")
+                    self._draw_realtime_statistics(statistics)
+                    self.realtime_start_button.configure(state=tk.NORMAL)
+                    self.realtime_cancel_button.configure(state=tk.DISABLED)
+                elif kind == "cancelled":
+                    self.realtime_status_text.set(str(payload))
+                    self.realtime_summary_text.set("Der Lauf wurde kontrolliert abgebrochen.")
+                    self.realtime_start_button.configure(state=tk.NORMAL)
+                    self.realtime_cancel_button.configure(state=tk.DISABLED)
+                else:
+                    details = str(payload)
+                    self.realtime_status_text.set("Virtueller Echtzeittest fehlgeschlagen.")
+                    self.realtime_start_button.configure(state=tk.NORMAL)
+                    self.realtime_cancel_button.configure(state=tk.DISABLED)
+                    messagebox.showerror(
+                        "Fehler im virtuellen Echtzeittest",
+                        details.splitlines()[-1] if details else "Unbekannter Fehler",
+                        parent=self,
+                    )
+        except queue.Empty:
+            pass
+        self.after(100, self._poll_realtime_worker)
 
     def _choose_reference_file(self) -> None:
         selected = filedialog.askopenfilename(
