@@ -95,6 +95,8 @@ class GuiRealtimeTabTests(unittest.TestCase):
         self.assertIn("Kernel 0", text)
         self.assertIn("Gesamtverarbeitung 0", text)
         self.assertIn("inkl. Taktjitter 1", text)
+        self.assertIn("P99,9", text)
+        self.assertIn("Fehlerepisoden", text)
         self.assertIn("Threadarbeit", text)
         self.assertIn("P99/Median", text)
 

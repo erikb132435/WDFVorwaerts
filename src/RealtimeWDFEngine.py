@@ -14,7 +14,6 @@ werden.
 from __future__ import annotations
 
 import argparse
-import ctypes
 import csv
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -30,10 +29,11 @@ from typing import Any, Callable
 import wave
 
 import numpy as np
-from scipy.io import wavfile
 
 import WDFSolverFast as wdf_fast
 import WDFSolverVPres as wdf_reference
+from audio_signal import WavVoltageSource
+import realtime_metrics as metrics
 
 
 @dataclass(frozen=True)
@@ -77,80 +77,6 @@ class VirtualRealtimeConfig:
             )
 
 
-class WavVoltageSource:
-    """Speichergemapte WAV-Quelle mit expliziter Abbildung auf Spannung."""
-
-    def __init__(self, path: str | Path):
-        self.path = Path(path).expanduser().resolve()
-        if not self.path.is_file():
-            raise FileNotFoundError(f"WAV-Eingang nicht gefunden: {self.path}")
-        if self.path.suffix.lower() != ".wav":
-            raise ValueError("Der virtuelle Echtzeitpfad erwartet eine WAV-Datei.")
-        try:
-            fs_hz, samples = wavfile.read(self.path, mmap=True)
-        except ValueError:
-            # Beispielsweise 24-Bit-PCM kann wegen der 3-Byte-Samplebreite
-            # nicht speichergemappt werden. Die gleiche Block-API bleibt nach
-            # einem konventionellen Lesevorgang dennoch erhalten.
-            fs_hz, samples = wavfile.read(self.path, mmap=False)
-        self.fs_hz = float(fs_hz)
-        self.samples = np.asarray(samples)
-        if self.samples.ndim not in (1, 2):
-            raise ValueError("Die WAV-Datei muss mono oder mehrkanalig zweidimensional sein.")
-        if len(self.samples) == 0:
-            raise ValueError("Die WAV-Datei ist leer.")
-        if not (
-            np.issubdtype(self.samples.dtype, np.integer)
-            or np.issubdtype(self.samples.dtype, np.floating)
-        ):
-            raise ValueError(f"Nicht unterstuetzter WAV-Datentyp: {self.samples.dtype}")
-
-    @property
-    def sample_count(self) -> int:
-        return int(len(self.samples))
-
-    @property
-    def channels(self) -> int:
-        return 1 if self.samples.ndim == 1 else int(self.samples.shape[1])
-
-    def read_normalized_into(self, start: int, stop: int, destination: np.ndarray) -> None:
-        """Liest einen Monoblock in normierter Vollaussteuerung als Float64."""
-        source = self.samples[start:stop]
-        destination = np.asarray(destination)
-        expected_length = stop - start
-        if destination.dtype != np.float64 or destination.shape != (expected_length,):
-            raise ValueError("Der WAV-Zielpuffer muss ein passender Float64-Vektor sein.")
-
-        if source.ndim == 1:
-            np.copyto(destination, source, casting="unsafe")
-        else:
-            np.mean(source, axis=1, dtype=np.float64, out=destination)
-
-        if np.issubdtype(self.samples.dtype, np.signedinteger):
-            info = np.iinfo(self.samples.dtype)
-            destination /= float(max(abs(info.min), abs(info.max)))
-        elif np.issubdtype(self.samples.dtype, np.unsignedinteger):
-            info = np.iinfo(self.samples.dtype)
-            midpoint = 0.5 * (float(info.max) + float(info.min) + 1.0)
-            destination -= midpoint
-            destination /= midpoint
-
-        if not np.all(np.isfinite(destination)):
-            raise ValueError("Die WAV-Datei enthaelt nichtendliche Werte.")
-
-    def normalized_rms(self, sample_count: int, block_size: int) -> float:
-        scratch = np.empty(block_size, dtype=np.float64)
-        energy = 0.0
-        counted = 0
-        for start in range(0, sample_count, block_size):
-            stop = min(start + block_size, sample_count)
-            block = scratch[: stop - start]
-            self.read_normalized_into(start, stop, block)
-            energy += float(np.dot(block, block))
-            counted += len(block)
-        return float(np.sqrt(energy / counted)) if counted else 0.0
-
-
 class RealtimeWDFEngine:
     """Vorallokierter Blockadapter um den schnellen Bernardini-Solver."""
 
@@ -185,43 +111,6 @@ class RealtimeWDFEngine:
 
 class RealtimeRunCancelled(RuntimeError):
     """Signalisiert einen kontrolliert zwischen zwei Bloecken beendeten Lauf."""
-
-
-class _ThreadWorkCounter:
-    """Hochaufloesender Zaehler fuer die Arbeit des aktuellen Threads.
-
-    Windows stellt mit ``QueryThreadCycleTime`` einen fuer kurze Audiobloecke
-    wesentlich feineren Zaehler als ``time.thread_time()`` bereit. Auf anderen
-    Plattformen dient die Thread-CPU-Zeit in Nanosekunden als Arbeitsmass.
-    Die Werte werden bewusst nicht in Sekunden umgerechnet, weil CPU-Takt und
-    Turbomodus waehrend eines Laufs variieren koennen.
-    """
-
-    def __init__(self) -> None:
-        if sys.platform == "win32":
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-            kernel32.GetCurrentThread.restype = ctypes.c_void_p
-            kernel32.QueryThreadCycleTime.argtypes = (
-                ctypes.c_void_p,
-                ctypes.POINTER(ctypes.c_ulonglong),
-            )
-            kernel32.QueryThreadCycleTime.restype = ctypes.c_int
-            self._query = kernel32.QueryThreadCycleTime
-            self._thread = kernel32.GetCurrentThread()
-            self.unit = "cycles"
-        else:
-            self._query = None
-            self._thread = None
-            self.unit = "ns"
-
-    def read(self) -> float:
-        if self._query is None:
-            return float(time.thread_time_ns())
-        value = ctypes.c_ulonglong()
-        if not self._query(self._thread, ctypes.byref(value)):
-            error = ctypes.get_last_error()
-            raise OSError(error, "QueryThreadCycleTime ist fehlgeschlagen.")
-        return float(value.value)
 
 
 @dataclass(frozen=True)
@@ -260,44 +149,22 @@ class RealtimeStatistics:
 
     @staticmethod
     def _timing_summary(values_s: np.ndarray) -> dict[str, float]:
-        values = np.asarray(values_s, dtype=float)
-        if not values.size:
-            return {"median_us": 0.0, "p95_us": 0.0, "p99_us": 0.0, "max_us": 0.0}
-        return {
-            "median_us": float(1e6 * np.median(values)),
-            "p95_us": float(1e6 * np.percentile(values, 95)),
-            "p99_us": float(1e6 * np.percentile(values, 99)),
-            "max_us": float(1e6 * np.max(values)),
-        }
+        return metrics.timing_summary(values_s)
 
     @staticmethod
     def _work_summary(values: np.ndarray, unit: str) -> dict[str, float | str]:
-        values = np.asarray(values, dtype=float)
-        if not values.size:
-            return {
-                "unit": unit,
-                "median": 0.0,
-                "p95": 0.0,
-                "p99": 0.0,
-                "max": 0.0,
-                "p99_over_median": 0.0,
-                "max_over_median": 0.0,
-            }
-        median = float(np.median(values))
-        p99 = float(np.percentile(values, 99))
-        maximum = float(np.max(values))
-        return {
-            "unit": unit,
-            "median": median,
-            "p95": float(np.percentile(values, 95)),
-            "p99": p99,
-            "max": maximum,
-            "p99_over_median": p99 / median if median > 0.0 else float("inf"),
-            "max_over_median": maximum / median if median > 0.0 else float("inf"),
-        }
+        return metrics.work_summary(values, unit)
 
     def summary(self) -> dict[str, Any]:
         total_processing_s = float(np.sum(self.total_block_times_s))
+        scheduled_episodes = metrics.deadline_episodes(
+            self.scheduled_deadline_misses,
+            self.block_deadlines_s,
+        )
+        processing_episodes = metrics.deadline_episodes(
+            self.total_processing_deadline_misses,
+            self.block_deadlines_s,
+        )
         return {
             "fs_hz": self.fs_hz,
             "block_size": self.block_size,
@@ -341,6 +208,8 @@ class RealtimeStatistics:
                 np.count_nonzero(self.total_processing_deadline_misses)
             ),
             "scheduled_deadline_misses": int(np.count_nonzero(self.scheduled_deadline_misses)),
+            "total_processing_deadline_episodes": processing_episodes.summary(),
+            "scheduled_deadline_episodes": scheduled_episodes.summary(),
         }
 
 
@@ -480,7 +349,7 @@ def run_virtual_realtime_wav(
     kernel_miss_count = 0
     total_miss_count = 0
     scheduled_miss_count = 0
-    thread_work_counter = _ThreadWorkCounter()
+    thread_work_counter = metrics.ThreadWorkCounter()
     gc_was_enabled = gc.isenabled()
     if active_config.disable_gc_during_stream and gc_was_enabled:
         gc.disable()
@@ -720,7 +589,7 @@ def write_run_artifacts(result: VirtualRealtimeResult) -> None:
         )
 
     metadata = {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "input": {
             "path": str(result.input_path),

@@ -85,6 +85,11 @@ Zeit unter der Deadline liegt. Fuer einen belastbaren Nachweis sind lange
 Laeufe ohne Deadline-Verletzung sowie P99-/Maximalwerte unter zusaetzlicher
 System- und GUI-Last notwendig.
 
+Die zusammengefasste Statistik enthaelt zusaetzlich p99,9 und gruppiert
+aufeinanderfolgende Deadline-Verletzungen in Episoden. Dadurch wird eine
+einzelne Stoerung mit mehreren Folgefehlern nicht als mehrere unabhaengige
+Ursachen interpretiert.
+
 ## Threadarbeitsdiagnose
 
 Die bisherige Wandzeit laeuft auch dann weiter, wenn Windows den Worker-Thread

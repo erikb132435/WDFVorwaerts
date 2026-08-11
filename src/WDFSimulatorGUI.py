@@ -1748,9 +1748,11 @@ class WDFSimulatorGUI(tk.Tk):
                 f"Blockfrist {deadline_us:.3f} µs · Eingang {input_rms_voltage:.6g} V RMS",
                 f"Kernel: Median {values['kernel']['median_us']:.3f} µs, "
                 f"P99 {values['kernel']['p99_us']:.3f} µs, "
+                f"P99,9 {values['kernel']['p999_us']:.3f} µs, "
                 f"Maximum {values['kernel']['max_us']:.3f} µs",
                 f"Gesamtblock: Median {values['total_block']['median_us']:.3f} µs, "
                 f"P99 {values['total_block']['p99_us']:.3f} µs, "
+                f"P99,9 {values['total_block']['p999_us']:.3f} µs, "
                 f"Maximum {values['total_block']['max_us']:.3f} µs",
                 f"Relative Kernel-Threadarbeit ({values['kernel_thread_work']['unit']}): "
                 f"P99/Median {values['kernel_thread_work']['p99_over_median']:.3f}, "
@@ -1759,6 +1761,10 @@ class WDFSimulatorGUI(tk.Tk):
                 f"Gesamtverarbeitung {values['total_processing_deadline_misses']}, "
                 f"inkl. Taktjitter {values['scheduled_deadline_misses']} "
                 f"({'getaktet' if paced else 'ungetaktet'})",
+                f"Fehlerepisoden inkl. Taktjitter: "
+                f"{values['scheduled_deadline_episodes']['episode_count']}, "
+                f"längste Folge "
+                f"{values['scheduled_deadline_episodes']['longest_episode_blocks']} Blöcke",
                 f"Ausgabepuffer: {output_storage_mode or 'nicht angegeben'} · "
                 f"Ergebnisse: {output_directory}",
             )

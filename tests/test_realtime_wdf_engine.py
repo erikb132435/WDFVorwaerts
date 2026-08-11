@@ -111,6 +111,11 @@ class RealtimeWDFEngineTests(unittest.TestCase):
                 self.assertFalse(metadata["outputs"]["monitor_wav"]["scientific_level_valid"])
                 self.assertEqual(metadata["statistics"]["sample_count"], len(pcm))
                 self.assertIn("kernel_thread_work", metadata["statistics"])
+                self.assertIn("p999_us", metadata["statistics"]["total_block"])
+                self.assertIn(
+                    "scheduled_deadline_episodes",
+                    metadata["statistics"],
+                )
                 timing_lines = (output_directory / "block_timing.csv").read_text(
                     encoding="utf-8"
                 ).splitlines()
