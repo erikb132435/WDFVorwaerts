@@ -26,6 +26,41 @@ import WDFSolverVPres as wdf_reference
 
 
 SCHEMA_VERSION = "1.0"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+RUN_CONFIG_FIELDS = {
+    "small_signal_reference": {"experiment", "preset_name", "reference_path"},
+    "nonlinear_characteristics": {
+        "experiment", "preset_name", "x_min_mm", "x_max_mm", "points",
+    },
+    "stationary_sine": {
+        "experiment", "preset_name", "solver_mode", "fs", "vrms",
+        "input_level_mode", "duration_s", "settle_s", "frequency_mode",
+        "freq_hz", "harmonics", "record_internal", "reference_enabled",
+        "reference_path",
+    },
+    "thd_frequency_response": {
+        "experiment", "preset_name", "solver_mode", "fs", "vrms",
+        "input_level_mode", "f_min_hz", "f_max_hz", "frequency_points",
+        "harmonics",
+    },
+    "two_tone": {
+        "experiment", "preset_name", "solver_mode", "fs", "vrms",
+        "input_level_mode", "duration_s", "settle_s", "freq1_hz", "freq2_hz",
+        "phase1_rad", "phase2_rad", "record_internal", "reference_enabled",
+        "reference_path",
+    },
+    "exponential_sweep": {
+        "experiment", "preset_name", "solver_mode", "fs", "vrms",
+        "input_level_mode", "duration_s", "f_min_hz", "f_max_hz",
+        "record_internal",
+    },
+    "external_signal": {
+        "experiment", "preset_name", "solver_mode", "fs", "vrms",
+        "input_level_mode", "settle_s", "signal_path", "normalise_external",
+        "record_internal", "reference_enabled", "reference_path",
+    },
+}
 
 
 def can_export_validation_package(result: Any) -> bool:
@@ -68,6 +103,39 @@ def _safe_token(value: Any) -> str:
     token = str(value).strip().replace("_", "-")
     token = re.sub(r"[^A-Za-z0-9.-]+", "-", token)
     return token.strip("-.") or "Fall"
+
+
+def _portable_path(value: Any) -> str:
+    """Speichert Projektpfade relativ und externe Pfade nur als Dateinamen."""
+    text = str(value).strip()
+    if not text:
+        return text
+    path = Path(text).expanduser()
+    try:
+        resolved = path.resolve()
+        return resolved.relative_to(PROJECT_ROOT).as_posix()
+    except (OSError, ValueError):
+        return path.name
+
+
+def _portable_reference_metadata(value: Any) -> Any:
+    metadata = _jsonable(value)
+    if isinstance(metadata, dict) and metadata.get("path"):
+        metadata["path"] = _portable_path(metadata["path"])
+    return metadata
+
+
+def _relevant_run_config(run_config: dict[str, Any]) -> dict[str, Any]:
+    experiment = str(run_config.get("experiment", ""))
+    allowed = RUN_CONFIG_FIELDS.get(experiment)
+    if allowed is None:
+        relevant = dict(run_config)
+    else:
+        relevant = {key: value for key, value in run_config.items() if key in allowed}
+    for key in ("reference_path", "signal_path"):
+        if key in relevant:
+            relevant[key] = _portable_path(relevant[key])
+    return relevant
 
 
 def build_validation_case_id(result: Any, run_config: dict[str, Any]) -> str:
@@ -308,16 +376,14 @@ def _copy_references(directory: Path, data: dict[str, Any]) -> list[dict[str, An
         ("time_reference", data.get("time_reference")),
     ]
     copied: list[dict[str, Any]] = []
-    seen: set[Path] = set()
+    copied_by_source: dict[Path, dict[str, Any]] = {}
     for role, reference in candidates:
         source_value = getattr(reference, "path", None)
         if source_value is None:
             continue
         source = Path(source_value).expanduser().resolve()
-        if source in seen:
-            for item in copied:
-                if Path(item["source_path"]).resolve() == source:
-                    item["roles"].append(role)
+        if source in copied_by_source:
+            copied_by_source[source]["roles"].append(role)
             continue
         if not source.is_file():
             raise FileNotFoundError(f"Referenzdatei nicht gefunden: {source}")
@@ -329,12 +395,12 @@ def _copy_references(directory: Path, data: dict[str, Any]) -> list[dict[str, An
         copied.append(
             {
                 "roles": [role],
-                "source_path": str(source),
+                "source_path": _portable_path(source),
                 "archive_path": destination.relative_to(directory).as_posix(),
                 "sha256": _sha256(destination),
             }
         )
-        seen.add(source)
+        copied_by_source[source] = copied[-1]
     if not copied:
         raise ValueError("Im Ergebnis ist keine kopierbare Referenzdatei enthalten.")
     return copied
@@ -350,7 +416,11 @@ def _result_scalar_metadata(data: dict[str, Any]) -> dict[str, Any]:
             "reference_metadata",
             "time_reference_metadata",
         }:
-            metadata[key] = _jsonable(value)
+            metadata[key] = (
+                _portable_reference_metadata(value)
+                if key in {"reference_metadata", "time_reference_metadata"}
+                else _jsonable(value)
+            )
     return metadata
 
 
@@ -424,7 +494,7 @@ def export_validation_package(
             "preset_name": result.preset_name,
             "fs_hz": result.fs,
             "summary": result.summary,
-            "run_config": _jsonable(run_config),
+            "run_config": _jsonable(_relevant_run_config(run_config)),
             "model_parameters": _jsonable(model_parameters),
             "solver": {
                 "mode": data.get("solver_mode"),
@@ -439,8 +509,12 @@ def export_validation_package(
                 "python_executable": sys.executable,
             },
             "reference_files": reference_copies,
-            "reference_metadata": _jsonable(data.get("reference_metadata", {})),
-            "time_reference_metadata": _jsonable(data.get("time_reference_metadata", {})),
+            "reference_metadata": _portable_reference_metadata(
+                data.get("reference_metadata", {})
+            ),
+            "time_reference_metadata": _portable_reference_metadata(
+                data.get("time_reference_metadata", {})
+            ),
             "metrics": metrics,
             "result_metadata": _result_scalar_metadata(data),
             "array_keys": sorted(arrays),

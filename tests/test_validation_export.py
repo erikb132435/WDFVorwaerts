@@ -103,6 +103,7 @@ class ValidationExportTests(unittest.TestCase):
                 "vrms": 3.0,
                 "freq1_hz": 81.4,
                 "freq2_hz": 344.79,
+                "freq_hz": 999.0,
                 "reference_path": str(reference.path),
                 "reference_enabled": True,
             }
@@ -128,7 +129,20 @@ class ValidationExportTests(unittest.TestCase):
             metadata = json.loads((package / "metadata.json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["schema_version"], "1.0")
             self.assertEqual(metadata["solver"]["primary_backend"], "fast")
-            self.assertEqual(metadata["run_config"], config)
+            self.assertNotIn("freq_hz", metadata["run_config"])
+            self.assertEqual(
+                metadata["run_config"]["reference_path"], reference.path.name
+            )
+            self.assertEqual(
+                metadata["reference_files"][0]["source_path"], reference.path.name
+            )
+            self.assertEqual(
+                metadata["reference_metadata"]["path"], reference.path.name
+            )
+            self.assertEqual(
+                metadata["result_metadata"]["reference_metadata"]["path"],
+                reference.path.name,
+            )
             self.assertEqual(metadata["validation_status"], "evaluated_without_acceptance_threshold")
             self.assertEqual(len(metadata["reference_files"][0]["sha256"]), 64)
             expected_level_difference = 20.0 * np.log10(
@@ -236,6 +250,23 @@ class ValidationExportTests(unittest.TestCase):
 
         self.assertIn("_3Vrms_", case_id)
         self.assertNotIn("4p242", case_id)
+
+    def test_stationary_sine_config_omits_two_tone_fields(self):
+        config = {
+            "experiment": "stationary_sine",
+            "preset_name": "Spk-1",
+            "freq_hz": 28.75,
+            "freq1_hz": 28.75,
+            "freq2_hz": 121.78,
+            "phase1_rad": 0.8472,
+            "phase2_rad": 2.2179,
+        }
+
+        relevant = validation_export._relevant_run_config(config)
+
+        self.assertEqual(relevant["freq_hz"], 28.75)
+        for key in ("freq1_hz", "freq2_hz", "phase1_rad", "phase2_rad"):
+            self.assertNotIn(key, relevant)
 
 
 if __name__ == "__main__":
