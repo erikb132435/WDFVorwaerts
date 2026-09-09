@@ -31,7 +31,7 @@
 
 ### Bernardini-Messdaten und Referenzvergleich
 
-- Die Anregung unterscheidet explizit zwischen einem physikalischen RMS-Nennpegel und dem empirischen Bernardini-Reproduktionsfaktor. Im Reproduktionsmodus gilt $V_{\mathrm{RMS,eff}}=\sqrt{2}\,A_\mathrm{in}$; der unveränderte Nennwert $A_\mathrm{in}$ bleibt für die Zuordnung der Referenzspalte maßgeblich. Standardmäßig bleibt der Skalierungsfaktor eins.
+- Die GUI bietet zwei explizit getrennte Eingangspegel-Konventionen. Im Standardmodus gilt entsprechend Gl. (40) von Bernardini et al. $\operatorname{rms}\{V_\mathrm{in}\}=A_\mathrm{in}$. Zusätzlich steht für eine transparent gekennzeichnete Sensitivitätsanalyse der bereitgestellten Messdaten die Option „Bernardini-Datensatz-Hypothese (zusätzlich $\times\sqrt{2}$)“ mit $\operatorname{rms}\{V_\mathrm{in}\}=\sqrt{2}A_\mathrm{in}$ zur Verfügung. Modus, Faktor, angegebener Parameter und tatsächlich angewendeter RMS-Wert werden getrennt gespeichert; die Solver selbst bleiben unverändert. Vorherige Ergebnisarchive bleiben zur Reproduzierbarkeit unverändert und sind nicht als finale Validierungsläufe zu verwenden.
 - Solver-unabhängige Referenz- und Vergleichsschicht in `spectral_comparison.py` eingeführt. Messgröße, Einheit, Skalierung, Frequenzraster, Versuchskonfiguration sowie bestätigte und angenommene PSD-Parameter werden explizit geführt.
 - Fig. 4 wird als $|Z_e(f)|$ in $\Omega$ beziehungsweise $|P_\mathrm{out}(f)|$ in Pa interpretiert. Eine dritte Spalte wird nur ignoriert, wenn sie vollständig null ist.
 - Zeitdaten werden mit $F_s=96\,\mathrm{kHz}$ interpretiert. Mehrfachspalten werden eindeutig über Paperfrequenz und RMS-Pegel ausgewählt; eine lediglich „nächstliegende“ Konfiguration ist nicht zulässig.

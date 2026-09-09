@@ -5,6 +5,38 @@ Dieses Dokument beschreibt ausschliesslich den optimierten Modellpfad in
 `src/WDFSolverVPres.py` bleibt davon getrennt und wird nicht durch den schnellen
 Solver ersetzt.
 
+## Version 0.3.0 - 11.08.2026
+
+### Reale Audio-Callback-Anbindung
+
+- Den GUI- und treiberunabhaengigen Callback-Kern in
+  `src/RealtimeAudioEngine.py` ueber den separaten Adapter
+  `src/PortAudioBackend.py` an `sounddevice`/PortAudio angebunden.
+- Den sicheren Hardwaretest standardmaessig mit stummem Audioausgang umgesetzt;
+  der berechnete Schalldruck bleibt eine getrennte wissenschaftliche Ausgabe in
+  Pascal und wird nicht als Audiospannung interpretiert.
+- WAV-Eingang, Spannungsskalierung, Modellzustand und Ergebnisarrays vor
+  Streambeginn vorbereitet. Im Audiocallback erfolgen weder Dateizugriffe noch
+  GUI-Operationen; Ergebnisdateien werden erst nach Streamende geschrieben.
+- Solverzeit, gesamte Enginezeit und PortAudio-Adapterzeit getrennt pro Block
+  erfasst. PortAudio-Underflows und -Overflows werden zusaetzlich zu den intern
+  gemessenen Deadline-Verletzungen gespeichert.
+- Headless-Kommandozeile fuer Geraeteabfrage und reproduzierbare Hardwarelaeufe
+  bei 44,1 oder 48 kHz eingefuehrt.
+- Den WASAPI-Exclusive-Modus als explizite Option ergaenzt; der bisherige
+  Windows-Shared-Modus bleibt unveraenderter Standard.
+- Sechs hardwarefreie Adaptertests pruefen Geraetefilterung, sampleidentische
+  Druckausgabe, stummen Ausgang, Treiberstatus, sauberen Streamabschluss und
+  Ergebnisexport einschliesslich Exclusive-Konfiguration.
+- In einer stummen Scarlett-WASAPI-Matrix mit drei Wiederholungen je Bedingung
+  verringerte Exclusive die gemeldete Ausgangslatenz bei 256 Samples von
+  22,0 auf 8,7 ms und bei 128 Samples auf 5,8 ms. In allen zwoelf Laeufen
+  wurden keine Treiber-Underflows oder -Overflows gemeldet.
+- Einen explizit aktivierbaren Druckmonitor eingefuehrt. Er bildet den
+  Modelldruck mit einer festen Pa/FS-Skalierung auf Float32-Audio ab, ersetzt
+  NaN/Inf sicher und begrenzt Spitzen ohne dynamische Normalisierung. Der
+  wissenschaftliche Druckausgang bleibt rechnerisch unveraendert.
+
 ## Version 0.2.0 – 22.07.2026
 
 ### Parallele GUI-Einbindung

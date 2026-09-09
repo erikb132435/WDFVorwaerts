@@ -133,6 +133,19 @@ class TimeSeriesComparison:
         return float(self.lag_samples) + float(self.fractional_offset_samples)
 
     @property
+    def ac_level_difference_db(self) -> float:
+        """RMS-Pegeldifferenz der mittelwertfreien Drucksignale in dB.
+
+        Positive Werte kennzeichnen einen hoeheren Simulationspegel, negative
+        Werte einen niedrigeren Simulationspegel gegenueber der Messreferenz.
+        """
+        simulation_ac = self.simulation - np.mean(self.simulation)
+        simulation_ac_rms = float(np.sqrt(np.mean(simulation_ac * simulation_ac)))
+        if simulation_ac_rms <= np.finfo(float).tiny:
+            return float("-inf")
+        return float(20.0 * np.log10(simulation_ac_rms / self.ac_reference_rms_pa))
+
+    @property
     def comparison_samples(self) -> int:
         return int(len(self.reference))
 

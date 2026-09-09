@@ -73,12 +73,6 @@ PLOT_OPTIONS = {
     ],
 }
 
-STANDARD_INPUT_LEVEL_MODE = "Physikalischer RMS-Wert"
-BERNARDINI_INPUT_LEVEL_MODE = "Bernardini-Reproduktion (A_in * sqrt(2))"
-INPUT_LEVEL_MODES = {
-    STANDARD_INPUT_LEVEL_MODE: 1.0,
-    BERNARDINI_INPUT_LEVEL_MODE: float(np.sqrt(2.0)),
-}
 REALTIME_OUTPUT_STORAGE_MODES = {
     "RAM-Puffer (nach Test speichern)": "memory",
     "Dateibasierter Memmap-Puffer": "memmap",
@@ -93,6 +87,15 @@ SOLVER_MODES = (
     FAST_SOLVER_MODE,
     COMPARE_SOLVER_MODE,
 )
+
+STANDARD_INPUT_LEVEL_MODE = "Standard"
+BERNARDINI_DATASET_INPUT_LEVEL_MODE = (
+    "Bernardini-Datensatz-Hypothese (zusätzlich × √2)"
+)
+INPUT_LEVEL_SCALE_FACTORS = {
+    STANDARD_INPUT_LEVEL_MODE: 1.0,
+    BERNARDINI_DATASET_INPUT_LEVEL_MODE: float(np.sqrt(2.0)),
+}
 
 
 @dataclass
@@ -141,36 +144,49 @@ def _normalise_rms(signal: np.ndarray, target_vrms: float) -> np.ndarray:
 
 
 def _resolve_input_level(config: dict[str, Any]) -> tuple[float, float, float, str]:
-    """Uebersetzt den angezeigten A_in-Wert in den tatsaechlichen RMS-Antrieb."""
-    nominal_vrms = float(config["vrms"])
-    if not np.isfinite(nominal_vrms) or nominal_vrms <= 0.0:
+    """Liefert angegebenen und tatsächlich angewendeten RMS-Eingangspegel."""
+    input_level_parameter_vrms = float(config["vrms"])
+    if not np.isfinite(input_level_parameter_vrms) or input_level_parameter_vrms <= 0.0:
         raise ValueError("Der Eingangspegel A_in muss positiv und endlich sein.")
     mode = str(config.get("input_level_mode", STANDARD_INPUT_LEVEL_MODE))
-    if mode not in INPUT_LEVEL_MODES:
-        raise ValueError(f"Unbekannte Pegelkonvention: {mode}")
-    scale_factor = INPUT_LEVEL_MODES[mode]
-    effective_vrms = nominal_vrms * scale_factor
-    return nominal_vrms, effective_vrms, scale_factor, mode
+    try:
+        scale_factor = INPUT_LEVEL_SCALE_FACTORS[mode]
+    except KeyError as exc:
+        raise ValueError(f"Unbekannte Eingangspegel-Konvention: {mode}") from exc
+    input_rms_voltage_v = float(input_level_parameter_vrms * scale_factor)
+    return input_level_parameter_vrms, input_rms_voltage_v, scale_factor, mode
 
 
 def _input_level_metadata(
-    nominal_vrms: float,
-    effective_vrms: float,
+    input_level_parameter_vrms: float,
+    input_rms_voltage_v: float,
     scale_factor: float,
     mode: str,
 ) -> dict[str, Any]:
     return {
-        "input_level_mode": mode,
+        "input_level_parameter_vrms": input_level_parameter_vrms,
+        "input_rms_voltage_v": input_rms_voltage_v,
         "input_level_scale_factor": scale_factor,
-        "nominal_input_level_vrms": nominal_vrms,
-        "effective_input_level_vrms": effective_vrms,
+        "input_level_mode": mode,
+        "input_level_definition": (
+            "rms(V_in) = A_in"
+            if mode == STANDARD_INPUT_LEVEL_MODE
+            else "rms(V_in) = sqrt(2) * A_in (empirische Datensatz-Hypothese)"
+        ),
     }
 
 
-def _input_level_summary(nominal_vrms: float, effective_vrms: float, scale_factor: float) -> str:
-    if np.isclose(scale_factor, 1.0):
-        return f"{nominal_vrms:g} V RMS"
-    return f"A_in = {nominal_vrms:g} V, effektiver RMS-Pegel = {effective_vrms:.6g} V"
+def _input_level_summary(
+    input_level_parameter_vrms: float,
+    input_rms_voltage_v: float,
+    mode: str,
+) -> str:
+    if mode == STANDARD_INPUT_LEVEL_MODE:
+        return f"A_in = {input_level_parameter_vrms:g} V RMS (Standard)"
+    return (
+        f"A_in = {input_level_parameter_vrms:g} V; tatsächlich angewendet: "
+        f"{input_rms_voltage_v:g} V RMS (zusätzlich × √2)"
+    )
 
 
 def _solver_result_summary(data: dict[str, Any]) -> str | None:
@@ -467,6 +483,7 @@ def _reference_comparison_data(
         data["time_ac_rmse_pa"] = time_result.ac_rmse_pa
         data["time_ac_reference_rms_pa"] = time_result.ac_reference_rms_pa
         data["time_ac_nrmse_relative_rms"] = time_result.ac_nrmse
+        data["time_ac_level_difference_db"] = time_result.ac_level_difference_db
         data["time_comparison_samples"] = time_result.comparison_samples
         data["time_comparison_duration_s"] = time_result.duration_s
         data["alignment_start_integer_sample"] = time_result.lag_samples
@@ -479,6 +496,9 @@ def _reference_comparison_data(
             "||(P_sim-mean(P_sim)) - (P_meas-mean(P_meas))||_2 / "
             "||P_meas-mean(P_meas)||_2"
         )
+        data["ac_level_difference_definition"] = (
+            "20*log10(RMS(P_sim-mean(P_sim)) / RMS(P_meas-mean(P_meas)))"
+        )
         notices.append(
             f"Zeitreferenz Fig. {time_reference.figure}, Spalte „{time_result.descriptor.label}“; "
             "der Simulationsausschnitt wurde per normierter Kreuzkorrelation und "
@@ -486,6 +506,7 @@ def _reference_comparison_data(
             f"Absoluter NRMSE = {time_result.nrmse:.6g} "
             f"({100.0 * time_result.nrmse:.3f} %); AC-NRMSE = "
             f"{time_result.ac_nrmse:.6g} ({100.0 * time_result.ac_nrmse:.3f} %); "
+            f"Delta L_AC = {time_result.ac_level_difference_db:+.3f} dB; "
             f"N = {time_result.comparison_samples}, "
             f"Simulationsstart = {time_result.alignment_start_samples:.3f} Samples "
             f"({1000.0 * time_result.alignment_start_samples / fs:.3f} ms)."
@@ -609,13 +630,21 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
     solver_mode = str(config.get("solver_mode", REFERENCE_SOLVER_MODE))
     if solver_mode not in SOLVER_MODES:
         raise ValueError(f"Unbekannter Solvermodus: {solver_mode}")
-    nominal_vrms, effective_vrms, input_scale, input_level_mode = _resolve_input_level(config)
+    (
+        input_level_parameter_vrms,
+        input_vrms,
+        input_level_scale_factor,
+        input_level_mode,
+    ) = _resolve_input_level(config)
     input_level_data = _input_level_metadata(
-        nominal_vrms, effective_vrms, input_scale, input_level_mode
+        input_level_parameter_vrms,
+        input_vrms,
+        input_level_scale_factor,
+        input_level_mode,
     )
 
     if experiment == "stationary_sine":
-        vrms = nominal_vrms
+        vrms = input_vrms
         duration_s = float(config["duration_s"])
         settle_s = float(config["settle_s"])
         frequency_mode = str(config["frequency_mode"])
@@ -631,7 +660,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         if not 0.0 <= settle_s < duration_s:
             raise ValueError("Die Einschwingzeit muss kleiner als die Signaldauer sein.")
 
-        signal = wdf.generate_sine(fs, duration_s, freq_hz, effective_vrms)
+        signal = wdf.generate_sine(fs, duration_s, freq_hz, input_vrms)
         execution = _simulate(
             fs,
             params,
@@ -655,7 +684,12 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         )
         reference = _load_optional_reference(config, preset_name, expected_experiment="sinusoid")
         reference_data = _reference_comparison_data(
-            reference, output, fs, vrms, settle_s, frequencies_hz=(freq_hz,)
+            reference,
+            output,
+            fs,
+            input_level_parameter_vrms,
+            settle_s,
+            frequencies_hz=(freq_hz,),
         )
         return SimulationResult(
             experiment,
@@ -675,7 +709,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             }, **input_level_data, **traces, **execution.data, **solver_analysis_data, **reference_data),
             (
                 f"{preset_name}: stationärer Sinus bei {freq_hz:.3f} Hz, "
-                f"{_input_level_summary(vrms, effective_vrms, input_scale)}; "
+                f"{_input_level_summary(input_level_parameter_vrms, input_vrms, input_level_mode)}; "
                 f"verwendete Resonanzfrequenz {resonance_hz:.3f} Hz; THD {thd_point['thd_db']:.3f} dB."
             ),
         )
@@ -690,7 +724,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             _compute_stationary_thd_curve(
                 fs,
                 params,
-                effective_vrms,
+                input_vrms,
                 f_min,
                 f_max,
                 num_points=int(config["frequency_points"]),
@@ -714,7 +748,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             (
                 f"{preset_name}: THD aus {len(freqs)} stationären Sinusmessungen "
                 f"von {f_min:g} Hz bis {f_max:g} Hz; "
-                f"{_input_level_summary(nominal_vrms, effective_vrms, input_scale)}."
+                f"{_input_level_summary(input_level_parameter_vrms, input_vrms, input_level_mode)}."
             ),
         )
 
@@ -732,7 +766,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             duration_s,
             f1,
             f2,
-            effective_vrms,
+            input_vrms,
             phase1_rad=float(config["phase1_rad"]),
             phase2_rad=float(config["phase2_rad"]),
         )
@@ -756,7 +790,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             reference,
             output,
             fs,
-            nominal_vrms,
+            input_level_parameter_vrms,
             settle_s,
             frequencies_hz=(f1, f2),
             phases_rad=(float(config["phase1_rad"]), float(config["phase2_rad"])),
@@ -781,7 +815,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             ),
             (
                 f"{preset_name}: Zweiton-Anregung bei {f1:.3f} Hz und {f2:.3f} Hz; "
-                f"{_input_level_summary(nominal_vrms, effective_vrms, input_scale)}."
+                f"{_input_level_summary(input_level_parameter_vrms, input_vrms, input_level_mode)}."
             ),
         )
 
@@ -792,7 +826,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         if not 0.0 < f_min < f_max < fs / 2.0:
             raise ValueError("Der Sweep-Bereich muss innerhalb (0, Nyquist) liegen.")
         signal, inverse = wdf.generate_sweep(
-            fs, duration_s, f_min, f_max, effective_vrms
+            fs, duration_s, f_min, f_max, input_vrms
         )
         execution = _simulate(
             fs,
@@ -825,7 +859,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
             ),
             (
                 f"{preset_name}: exponentieller Sinus-Sweep von {f_min:g} Hz bis {f_max:g} Hz; "
-                f"{_input_level_summary(nominal_vrms, effective_vrms, input_scale)}."
+                f"{_input_level_summary(input_level_parameter_vrms, input_vrms, input_level_mode)}."
             ),
         )
 
@@ -846,7 +880,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         if signal.size == 0:
             raise ValueError("Die Signaldatei ist leer.")
         if bool(config["normalise_external"]):
-            signal = _normalise_rms(signal, effective_vrms)
+            signal = _normalise_rms(signal, input_vrms)
         execution = _simulate(
             fs,
             params,
@@ -867,7 +901,7 @@ def run_experiment(config: dict[str, Any]) -> SimulationResult:
         )
         reference = _load_optional_reference(config, preset_name, expected_experiment="music")
         reference_data = _reference_comparison_data(
-            reference, output, fs, nominal_vrms, settle_s
+            reference, output, fs, input_level_parameter_vrms, settle_s
         )
         return SimulationResult(
             experiment,
@@ -955,8 +989,7 @@ class WDFSimulatorGUI(tk.Tk):
         self.realtime_signal_path = tk.StringVar(value="")
         self.realtime_preset_name = tk.StringVar(value="Spk-2")
         self.realtime_block_size = tk.StringVar(value="128")
-        self.realtime_nominal_vrms = tk.StringVar(value="3.0")
-        self.realtime_input_level_mode = tk.StringVar(value=STANDARD_INPUT_LEVEL_MODE)
+        self.realtime_input_vrms = tk.StringVar(value="3.0")
         self.realtime_maximum_duration_s = tk.StringVar(value="")
         self.realtime_paced = tk.BooleanVar(value=True)
         self.realtime_disable_gc = tk.BooleanVar(value=False)
@@ -1020,12 +1053,12 @@ class WDFSimulatorGUI(tk.Tk):
         params = [
             ("solver_mode", "Solver", self.solver_mode, list(SOLVER_MODES)),
             ("fs", "Abtastrate F_s [Hz]", self.fs, None),
-            ("vrms", "Nennpegel A_in [V]", self.vrms, None),
+            ("vrms", "Eingangspegel A_in [V RMS]", self.vrms, None),
             (
                 "input_level_mode",
-                "Pegelkonvention",
+                "Eingangspegel-Konvention",
                 self.input_level_mode,
-                list(INPUT_LEVEL_MODES),
+                list(INPUT_LEVEL_SCALE_FACTORS),
             ),
             ("duration_s", "Signaldauer [s]", self.duration_s, None),
             ("settle_s", "Einschwingzeit [s]", self.settle_s, None),
@@ -1228,19 +1261,10 @@ class WDFSimulatorGUI(tk.Tk):
         ).grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
         row += 1
 
-        add_label("Nennpegel A_in [V]")
-        ttk.Entry(controls, textvariable=self.realtime_nominal_vrms).grid(
+        add_label("Eingangspegel A_in [V RMS]")
+        ttk.Entry(controls, textvariable=self.realtime_input_vrms).grid(
             row=row, column=1, columnspan=2, sticky="ew", pady=3
         )
-        row += 1
-
-        add_label("Pegelkonvention")
-        ttk.Combobox(
-            controls,
-            textvariable=self.realtime_input_level_mode,
-            values=tuple(INPUT_LEVEL_MODES),
-            state="readonly",
-        ).grid(row=row, column=1, columnspan=2, sticky="ew", pady=3)
         row += 1
 
         add_label("Maximale Dauer [s]")
@@ -1388,7 +1412,8 @@ class WDFSimulatorGUI(tk.Tk):
         if time_comparison is not None:
             lines.append(
                 f"Zeitvergleich: NRMSE AC {100.0 * time_comparison.ac_nrmse:.2f} %  ·  "
-                f"NRMSE absolut {100.0 * time_comparison.nrmse:.2f} %"
+                f"NRMSE absolut {100.0 * time_comparison.nrmse:.2f} %  ·  "
+                f"Delta L_AC {time_comparison.ac_level_difference_db:+.2f} dB"
             )
         return "\n".join(lines)
 
@@ -1432,17 +1457,25 @@ class WDFSimulatorGUI(tk.Tk):
                     ]
                 )
 
-        nominal_level = result.data.get("nominal_input_level_vrms")
-        effective_level = result.data.get("effective_input_level_vrms")
-        level_mode = result.data.get("input_level_mode")
-        if nominal_level is not None or effective_level is not None or level_mode is not None:
-            lines.extend(["", "PEGELKONVENTION"])
-            if level_mode is not None:
-                lines.append(f"Modus: {level_mode}")
-            if nominal_level is not None:
-                lines.append(f"Nennpegel A_in: {float(nominal_level):g} V RMS")
-            if effective_level is not None:
-                lines.append(f"Effektiver Simulationspegel: {float(effective_level):g} V RMS")
+        input_rms_voltage = result.data.get("input_rms_voltage_v")
+        if input_rms_voltage is not None:
+            input_level_parameter = result.data.get(
+                "input_level_parameter_vrms", input_rms_voltage
+            )
+            input_level_mode = result.data.get(
+                "input_level_mode", STANDARD_INPUT_LEVEL_MODE
+            )
+            input_level_scale_factor = result.data.get("input_level_scale_factor", 1.0)
+            lines.extend(
+                [
+                    "",
+                    "EINGANGSPEGEL",
+                    f"Modus: {input_level_mode}",
+                    f"Angegebener Parameter A_in: {float(input_level_parameter):g} V",
+                    f"Zusätzlicher Skalierungsfaktor: {float(input_level_scale_factor):g}",
+                    f"Tatsächlich angewendeter RMS-Wert: {float(input_rms_voltage):g} V RMS",
+                ]
+            )
 
         time_comparison = result.data.get("reference_time_comparison")
         if time_comparison is not None:
@@ -1454,6 +1487,7 @@ class WDFSimulatorGUI(tk.Tk):
                     f"({100.0 * time_comparison.nrmse:.3f} %)",
                     f"NRMSE AC: {time_comparison.ac_nrmse:.6f} "
                     f"({100.0 * time_comparison.ac_nrmse:.3f} %)",
+                    f"Delta L_AC: {time_comparison.ac_level_difference_db:+.4f} dB",
                     f"RMSE absolut: {time_comparison.rmse_pa:.6g} Pa",
                     f"Vergleichsdauer: {time_comparison.duration_s:.6g} s "
                     f"({time_comparison.comparison_samples} Samples)",
@@ -1621,13 +1655,9 @@ class WDFSimulatorGUI(tk.Tk):
         if preset_name not in wdf.BERNARDINI_PRESETS:
             raise ValueError(f"Unbekanntes Lautsprecherpreset: {preset_name}")
         block_size = int(self.realtime_block_size.get())
-        nominal_vrms = float(self.realtime_nominal_vrms.get())
-        if not np.isfinite(nominal_vrms) or nominal_vrms <= 0.0:
-            raise ValueError("Der Nennpegel muss positiv und endlich sein.")
-        level_mode = self.realtime_input_level_mode.get()
-        if level_mode not in INPUT_LEVEL_MODES:
-            raise ValueError(f"Unbekannte Pegelkonvention: {level_mode}")
-        effective_vrms = nominal_vrms * INPUT_LEVEL_MODES[level_mode]
+        input_vrms = float(self.realtime_input_vrms.get())
+        if not np.isfinite(input_vrms) or input_vrms <= 0.0:
+            raise ValueError("Der RMS-Eingangspegel muss positiv und endlich sein.")
 
         duration_text = self.realtime_maximum_duration_s.get().strip()
         maximum_duration_s = float(duration_text) if duration_text else None
@@ -1636,7 +1666,7 @@ class WDFSimulatorGUI(tk.Tk):
             raise ValueError(f"Unbekannter Ausgabepuffer: {storage_label}")
         config = realtime.VirtualRealtimeConfig(
             block_size=block_size,
-            target_rms_voltage=effective_vrms,
+            target_rms_voltage=input_vrms,
             paced=bool(self.realtime_paced.get()),
             maximum_duration_s=maximum_duration_s,
             disable_gc_during_stream=bool(self.realtime_disable_gc.get()),
@@ -1936,7 +1966,6 @@ class WDFSimulatorGUI(tk.Tk):
         if reference.experiment in {"sinusoid", "two_tone", "music"}:
             maximum_level = 11.5 if reference.preset_name == "Spk-1" else 3.0
             self.vrms.set(str(maximum_level))
-            self.input_level_mode.set(BERNARDINI_INPUT_LEVEL_MODE)
         if reference.experiment == "sinusoid":
             frequency = 28.75 if reference.preset_name == "Spk-1" else 81.4
             self.frequency_mode.set("frei wählbar")
@@ -2293,6 +2322,7 @@ class WDFSimulatorGUI(tk.Tk):
                         f"({100.0 * time_comparison.nrmse:.2f} %)\n"
                         f"NRMSE AC = {time_comparison.ac_nrmse:.5f} "
                         f"({100.0 * time_comparison.ac_nrmse:.2f} %)\n"
+                        f"Delta L_AC = {time_comparison.ac_level_difference_db:+.3f} dB\n"
                         f"Zeitversatz = {time_comparison.alignment_start_samples:.3f} Samples\n"
                         f"N = {time_comparison.comparison_samples}"
                     ),

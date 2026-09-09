@@ -51,7 +51,7 @@ def statistics() -> realtime.RealtimeStatistics:
 
 
 class GuiRealtimeTabTests(unittest.TestCase):
-    def test_gui_configuration_resolves_nominal_level_convention(self):
+    def test_gui_configuration_uses_physical_rms_voltage(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             input_path = root / "input.wav"
@@ -64,8 +64,7 @@ class GuiRealtimeTabTests(unittest.TestCase):
             harness.realtime_signal_path = Value(str(input_path))
             harness.realtime_preset_name = Value("Spk-2")
             harness.realtime_block_size = Value("128")
-            harness.realtime_nominal_vrms = Value("3.0")
-            harness.realtime_input_level_mode = Value(gui.BERNARDINI_INPUT_LEVEL_MODE)
+            harness.realtime_input_vrms = Value("3.0")
             harness.realtime_maximum_duration_s = Value("2.5")
             harness.realtime_paced = Value(True)
             harness.realtime_disable_gc = Value(False)
@@ -79,7 +78,7 @@ class GuiRealtimeTabTests(unittest.TestCase):
             self.assertEqual(selected_path, input_path.resolve())
             self.assertEqual(preset_name, "Spk-2")
             self.assertEqual(config.block_size, 128)
-            self.assertAlmostEqual(config.target_rms_voltage, 3.0 * np.sqrt(2.0))
+            self.assertAlmostEqual(config.target_rms_voltage, 3.0)
             self.assertEqual(config.maximum_duration_s, 2.5)
             self.assertEqual(config.output_storage_mode, "memory")
             self.assertEqual(output_root, (root / "outputs").resolve())

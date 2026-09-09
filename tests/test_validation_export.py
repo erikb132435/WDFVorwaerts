@@ -76,8 +76,8 @@ class ValidationExportTests(unittest.TestCase):
             "output": np.asarray([1.1, -0.9, 0.4]),
             "f1_hz": 81.4,
             "f2_hz": 344.79,
-            "nominal_vrms": 3.0,
-            "effective_vrms": 3.0,
+            "input_rms_voltage_v": 3.0,
+            "input_level_definition": "A_in = rms(V_in)",
         }
         if extra_data:
             data.update(extra_data)
@@ -93,7 +93,8 @@ class ValidationExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             reference = self.make_time_reference(root / "time_reference.txt")
-            result = self.make_result(reference, self.make_time_comparison())
+            time_comparison = self.make_time_comparison()
+            result = self.make_result(reference, time_comparison)
             config = {
                 "experiment": "two_tone",
                 "preset_name": "Spk-2",
@@ -130,6 +131,19 @@ class ValidationExportTests(unittest.TestCase):
             self.assertEqual(metadata["run_config"], config)
             self.assertEqual(metadata["validation_status"], "evaluated_without_acceptance_threshold")
             self.assertEqual(len(metadata["reference_files"][0]["sha256"]), 64)
+            expected_level_difference = 20.0 * np.log10(
+                np.std(time_comparison.simulation) / np.std(time_comparison.reference)
+            )
+            self.assertAlmostEqual(
+                time_comparison.ac_level_difference_db,
+                expected_level_difference,
+            )
+            metrics = {item["metric"]: item for item in metadata["metrics"]}
+            self.assertAlmostEqual(
+                float(metrics["ac_level_difference"]["value"]),
+                expected_level_difference,
+            )
+            self.assertEqual(metrics["ac_level_difference"]["unit"], "dB")
 
     def test_psd_package_uses_reference_frequency_grid_and_copies_both_references(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -194,6 +208,7 @@ class ValidationExportTests(unittest.TestCase):
             metrics_text = (package / "metrics.csv").read_text(encoding="utf-8")
             self.assertIn("spectral_rmse", metrics_text)
             self.assertIn("ac_nrmse", metrics_text)
+            self.assertIn("ac_level_difference", metrics_text)
 
     def test_rejects_results_without_fast_primary_backend(self):
         result = SimpleNamespace(
@@ -204,6 +219,23 @@ class ValidationExportTests(unittest.TestCase):
             }
         )
         self.assertFalse(validation_export.can_export_validation_package(result))
+
+    def test_case_id_uses_declared_level_with_sqrt2_hypothesis(self):
+        result = SimpleNamespace(
+            experiment="two_tone",
+            preset_name="Spk-2",
+            data={
+                "f1_hz": 81.4,
+                "f2_hz": 344.79,
+                "input_level_parameter_vrms": 3.0,
+                "input_rms_voltage_v": 3.0 * np.sqrt(2.0),
+            },
+        )
+
+        case_id = validation_export.build_validation_case_id(result, {})
+
+        self.assertIn("_3Vrms_", case_id)
+        self.assertNotIn("4p242", case_id)
 
 
 if __name__ == "__main__":

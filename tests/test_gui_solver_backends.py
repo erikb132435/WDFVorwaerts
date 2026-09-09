@@ -25,7 +25,6 @@ class GuiSolverBackendTests(unittest.TestCase):
                 "solver_mode": gui.COMPARE_SOLVER_MODE,
                 "fs": 16000.0,
                 "vrms": 1.0,
-                "input_level_mode": gui.STANDARD_INPUT_LEVEL_MODE,
                 "duration_s": 0.04,
                 "settle_s": 0.005,
                 "frequency_mode": "frei wählbar",
@@ -61,6 +60,15 @@ class GuiSolverBackendTests(unittest.TestCase):
     def test_stationary_sine_comparison_contains_visualization_data(self):
         result = self.stationary_comparison_result()
         self.assertEqual(result.data["solver_mode"], gui.COMPARE_SOLVER_MODE)
+        self.assertEqual(result.data["input_level_mode"], gui.STANDARD_INPUT_LEVEL_MODE)
+        self.assertEqual(result.data["input_level_scale_factor"], 1.0)
+        self.assertEqual(result.data["input_level_parameter_vrms"], 1.0)
+        self.assertEqual(result.data["input_rms_voltage_v"], 1.0)
+        self.assertAlmostEqual(
+            float(np.sqrt(np.mean(result.data["input"] ** 2))),
+            1.0,
+            places=12,
+        )
         for key in (
             "reference_solver_output",
             "fast_solver_output",
@@ -73,6 +81,60 @@ class GuiSolverBackendTests(unittest.TestCase):
             self.assertIn(key, result.data)
         self.assertIn("Solververgleich", gui.PLOT_OPTIONS["stationary_sine"])
         self.assertIn("Solververgleich", gui.WDFSimulatorGUI._format_result_brief(result))
+
+    def test_dataset_hypothesis_applies_additional_root_two_to_input_rms(self):
+        result = gui.run_experiment(
+            {
+                "experiment": "stationary_sine",
+                "preset_name": "Spk-2",
+                "solver_mode": gui.FAST_SOLVER_MODE,
+                "fs": 16000.0,
+                "vrms": 1.0,
+                "input_level_mode": gui.BERNARDINI_DATASET_INPUT_LEVEL_MODE,
+                "duration_s": 0.04,
+                "settle_s": 0.005,
+                "frequency_mode": "frei wählbar",
+                "freq_hz": 250.0,
+                "harmonics": 5,
+                "record_internal": False,
+                "reference_enabled": False,
+                "reference_path": "",
+            }
+        )
+        self.assertEqual(result.data["input_level_parameter_vrms"], 1.0)
+        self.assertAlmostEqual(result.data["input_level_scale_factor"], np.sqrt(2.0))
+        self.assertAlmostEqual(result.data["input_rms_voltage_v"], np.sqrt(2.0))
+        self.assertAlmostEqual(
+            float(np.sqrt(np.mean(result.data["input"] ** 2))),
+            np.sqrt(2.0),
+            places=12,
+        )
+
+    def test_dataset_hypothesis_also_scales_total_two_tone_rms(self):
+        result = gui.run_experiment(
+            {
+                "experiment": "two_tone",
+                "preset_name": "Spk-2",
+                "solver_mode": gui.FAST_SOLVER_MODE,
+                "fs": 16000.0,
+                "vrms": 1.0,
+                "input_level_mode": gui.BERNARDINI_DATASET_INPUT_LEVEL_MODE,
+                "duration_s": 0.04,
+                "settle_s": 0.005,
+                "freq1_hz": 250.0,
+                "freq2_hz": 500.0,
+                "phase1_rad": 0.3,
+                "phase2_rad": 0.7,
+                "record_internal": False,
+                "reference_enabled": False,
+                "reference_path": "",
+            }
+        )
+        self.assertAlmostEqual(
+            float(np.sqrt(np.mean(result.data["input"] ** 2))),
+            np.sqrt(2.0),
+            places=12,
+        )
 
     def test_solver_comparison_plot_renders_without_tk_window(self):
         result = self.stationary_comparison_result()
@@ -126,7 +188,6 @@ class GuiSolverBackendTests(unittest.TestCase):
                 "solver_mode": gui.COMPARE_SOLVER_MODE,
                 "fs": 4000.0,
                 "vrms": 0.5,
-                "input_level_mode": gui.STANDARD_INPUT_LEVEL_MODE,
                 "f_min_hz": 100.0,
                 "f_max_hz": 400.0,
                 "frequency_points": 2,

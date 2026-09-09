@@ -83,6 +83,60 @@ class RealtimeAudioEngineTests(unittest.TestCase):
             self.assertIn("p999_us", summary["callback"])
             self.assertIn("callback_deadline_episodes", summary)
 
+    def test_pressure_monitor_uses_fixed_scale_and_hard_peak_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "input.wav"
+            self.write_wav(path, sample_count=1000)
+            config = audio.AudioRealtimeConfig(
+                fs_hz=self.fs_hz,
+                block_size=256,
+                preset_name="Spk-2",
+                target_rms_voltage=3.0,
+                output_mode="pressure",
+                pressure_pa_per_full_scale=0.05,
+                output_peak_limit=0.1,
+            )
+
+            result = audio.run_simulated_wav(path, config)
+            expected = np.empty(len(result.output_pressure_pa), dtype=np.float32)
+            np.multiply(
+                result.output_pressure_pa,
+                1.0 / config.pressure_pa_per_full_scale,
+                out=expected,
+                casting="unsafe",
+            )
+            np.nan_to_num(
+                expected,
+                copy=False,
+                nan=0.0,
+                posinf=config.output_peak_limit,
+                neginf=-config.output_peak_limit,
+            )
+            np.clip(
+                expected,
+                -config.output_peak_limit,
+                config.output_peak_limit,
+                out=expected,
+            )
+
+            np.testing.assert_array_equal(result.rendered_audio, expected)
+            self.assertLessEqual(
+                result.rendered_audio_peak,
+                float(np.float32(config.output_peak_limit)),
+            )
+            self.assertEqual(
+                result.output_clipped_sample_count,
+                int(
+                    np.count_nonzero(
+                        np.abs(result.output_pressure_pa)
+                        > config.pressure_pa_per_full_scale
+                        * config.output_peak_limit
+                    )
+                ),
+            )
+            self.assertGreater(result.output_clipped_sample_count, 0)
+            self.assertEqual(result.pressure_nonfinite_sample_count, 0)
+
     def test_mismatched_wav_samplerate_is_rejected_before_callback(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "input.wav"
@@ -106,6 +160,18 @@ class RealtimeAudioEngineTests(unittest.TestCase):
                 engine.process_callback(np.empty((128, 1), dtype=np.float32))
             with self.assertRaises(RuntimeError):
                 engine.result()
+
+    def test_invalid_pressure_monitor_configuration_is_rejected(self):
+        with self.assertRaises(ValueError):
+            audio.AudioRealtimeConfig(
+                output_mode="pressure",
+                pressure_pa_per_full_scale=0.0,
+            ).validate()
+        with self.assertRaises(ValueError):
+            audio.AudioRealtimeConfig(
+                output_mode="pressure",
+                output_peak_limit=1.1,
+            ).validate()
 
 
 if __name__ == "__main__":

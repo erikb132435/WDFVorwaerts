@@ -29,6 +29,8 @@ class AudioRealtimeConfig:
     maximum_duration_s: float | None = None
     output_mode: str = "silent"
     dry_output_gain: float = 0.1
+    pressure_pa_per_full_scale: float = 20.0
+    output_peak_limit: float = 0.1
 
     def validate(self) -> None:
         if self.fs_hz not in {44100, 48000}:
@@ -42,10 +44,22 @@ class AudioRealtimeConfig:
         if self.maximum_duration_s is not None:
             if not np.isfinite(self.maximum_duration_s) or self.maximum_duration_s <= 0.0:
                 raise ValueError("Die maximale Dauer muss positiv und endlich sein.")
-        if self.output_mode not in {"silent", "dry"}:
-            raise ValueError("Der Audioausgang muss 'silent' oder 'dry' sein.")
+        if self.output_mode not in {"silent", "dry", "pressure"}:
+            raise ValueError(
+                "Der Audioausgang muss 'silent', 'dry' oder 'pressure' sein."
+            )
         if not np.isfinite(self.dry_output_gain) or not 0.0 <= self.dry_output_gain <= 1.0:
             raise ValueError("Die trockene Ausgangsverstaerkung muss in [0, 1] liegen.")
+        if (
+            not np.isfinite(self.pressure_pa_per_full_scale)
+            or self.pressure_pa_per_full_scale <= 0.0
+        ):
+            raise ValueError("Die Druckskalierung muss positiv und endlich sein.")
+        if (
+            not np.isfinite(self.output_peak_limit)
+            or not 0.0 < self.output_peak_limit <= 1.0
+        ):
+            raise ValueError("Die Ausgangsgrenze muss in (0, 1] liegen.")
 
 
 @dataclass(frozen=True)
@@ -126,7 +140,20 @@ class AudioCallbackResult:
     input_voltage: np.ndarray
     output_pressure_pa: np.ndarray
     rendered_audio: np.ndarray
+    rendered_audio_peak: float
+    output_clipped_sample_count: int
+    pressure_nonfinite_sample_count: int
     statistics: AudioCallbackStatistics
+
+    def output_summary(self) -> dict[str, Any]:
+        return {
+            "mode": self.config.output_mode,
+            "pressure_pa_per_full_scale": self.config.pressure_pa_per_full_scale,
+            "output_peak_limit": self.config.output_peak_limit,
+            "rendered_audio_peak": self.rendered_audio_peak,
+            "clipped_sample_count": self.output_clipped_sample_count,
+            "pressure_nonfinite_sample_count": self.pressure_nonfinite_sample_count,
+        }
 
 
 class RealtimeAudioEngine:
@@ -244,11 +271,6 @@ class RealtimeAudioEngine:
         start = self._completed_samples
         stop = min(start + self.config.block_size, self.sample_count)
         active_samples = stop - start
-        if self.config.output_mode == "dry":
-            if target.ndim == 1:
-                target[:active_samples] = self.dry_output[start:stop]
-            else:
-                target[:active_samples, :] = self.dry_output[start:stop, None]
 
         solver_started = time.perf_counter()
         work_started = self._thread_work_counter.read()
@@ -257,17 +279,46 @@ class RealtimeAudioEngine:
             self.output_pressure_pa[start:stop],
         )
         work_completed = self._thread_work_counter.read()
+        solver_completed = time.perf_counter()
+
+        rendered = self.rendered_audio[start:stop]
+        if self.config.output_mode == "dry":
+            rendered[:] = self.dry_output[start:stop]
+        elif self.config.output_mode == "pressure":
+            np.multiply(
+                self.output_pressure_pa[start:stop],
+                1.0 / self.config.pressure_pa_per_full_scale,
+                out=rendered,
+                casting="unsafe",
+            )
+            np.nan_to_num(
+                rendered,
+                copy=False,
+                nan=0.0,
+                posinf=self.config.output_peak_limit,
+                neginf=-self.config.output_peak_limit,
+            )
+            np.clip(
+                rendered,
+                -self.config.output_peak_limit,
+                self.config.output_peak_limit,
+                out=rendered,
+            )
+        else:
+            rendered.fill(0.0)
+
+        if target.ndim == 1:
+            target[:active_samples] = rendered
+        else:
+            target[:active_samples, :] = rendered[:, None]
         completed = time.perf_counter()
 
-        self.rendered_audio[start:stop] = (
-            self.dry_output[start:stop] if self.config.output_mode == "dry" else 0.0
-        )
         index = self._completed_blocks
         deadline_s = self.config.block_size / self.config.fs_hz
         callback_time_s = completed - callback_started
         active_status = status or _EMPTY_CALLBACK_STATUS
         self.callback_times_s[index] = callback_time_s
-        self.solver_times_s[index] = completed - solver_started
+        self.solver_times_s[index] = solver_completed - solver_started
         self.block_deadlines_s[index] = deadline_s
         self.callback_deadline_misses[index] = callback_time_s > deadline_s
         self.solver_thread_work[index] = work_completed - work_started
@@ -301,6 +352,28 @@ class RealtimeAudioEngine:
             output_overflows=self.output_overflows[:count].copy(),
             priming_output_blocks=self.priming_output_blocks[:count].copy(),
         )
+        rendered_peak = 0.0
+        clipped_sample_count = 0
+        pressure_nonfinite_sample_count = 0
+        pressure_limit = (
+            self.config.pressure_pa_per_full_scale
+            * self.config.output_peak_limit
+        )
+        chunk_size = 1_000_000
+        for start in range(0, self.sample_count, chunk_size):
+            rendered = self.rendered_audio[start : start + chunk_size]
+            rendered_peak = max(
+                rendered_peak,
+                float(np.max(np.abs(rendered), initial=0.0)),
+            )
+            if self.config.output_mode == "pressure":
+                pressure = self.output_pressure_pa[start : start + chunk_size]
+                finite = np.isfinite(pressure)
+                pressure_nonfinite_sample_count += int(np.count_nonzero(~finite))
+                clipped_sample_count += int(
+                    np.count_nonzero(np.abs(pressure[finite]) > pressure_limit)
+                )
+
         return AudioCallbackResult(
             input_path=self.input_path,
             config=self.config,
@@ -310,6 +383,9 @@ class RealtimeAudioEngine:
             input_voltage=self.input_voltage.copy(),
             output_pressure_pa=self.output_pressure_pa.copy(),
             rendered_audio=self.rendered_audio.copy(),
+            rendered_audio_peak=rendered_peak,
+            output_clipped_sample_count=clipped_sample_count,
+            pressure_nonfinite_sample_count=pressure_nonfinite_sample_count,
             statistics=statistics,
         )
 

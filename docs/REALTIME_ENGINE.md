@@ -10,7 +10,7 @@ Audiotreiber-Callback.
 
 `src/WDFSimulatorGUI.py` stellt dieselbe Engine im Reiter
 `Virtueller Echtzeittest` bereit. Dort koennen WAV-Datei, Lautsprecherpreset,
-Blockgroesse, Nennpegel, Pegelkonvention, optionale Laufzeitbegrenzung,
+Blockgroesse, physikalischer RMS-Eingangspegel, optionale Laufzeitbegrenzung,
 Echtzeittaktung, Garbage-Collector-Verhalten, Ausgabepuffer, Monitor-WAV und
 Ausgabeordner eingestellt werden. Fuer Diagnoselaeufe ist der RAM-Puffer in
 der GUI voreingestellt; die wissenschaftliche NPY-Datei wird dabei erst nach
@@ -36,8 +36,8 @@ Deadline-Zaehler an.
 ```
 
 `--target-rms-voltage` ist die tatsaechliche RMS-Spannung, die der Solver
-erhaelt. Eine Nennpegelkonvention wie `A_in * sqrt(2)` muss vor diesem Aufruf
-explizit auf die effektive Spannung abgebildet werden. Mit
+erhaelt. Sie entspricht dem Parameter $A_\mathrm{in}$ aus Gl. (40) von
+Bernardini et al. Mit
 `--preserve-wav-level` wird nicht auf einen RMS-Wert normiert; dann bestimmt
 `--volts-per-full-scale` die Spannungsabbildung.
 

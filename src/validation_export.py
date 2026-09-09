@@ -86,9 +86,12 @@ def build_validation_case_id(result: Any, run_config: dict[str, Any]) -> str:
         source = Path(str(data.get("source_path", run_config.get("signal_path", "Signal"))))
         parts.append(_safe_token(source.stem))
 
-    nominal_vrms = data.get("nominal_vrms", run_config.get("vrms"))
-    if nominal_vrms is not None:
-        parts.append(f"{_number_token(nominal_vrms)}Vrms")
+    input_vrms = data.get(
+        "input_level_parameter_vrms",
+        data.get("input_rms_voltage_v", run_config.get("vrms")),
+    )
+    if input_vrms is not None:
+        parts.append(f"{_number_token(input_vrms)}Vrms")
     parts.append("Fast")
     return "_".join(parts)
 
@@ -195,6 +198,14 @@ def _time_export(
         "1",
         "time",
         "||AC(P_sim)-AC(P_meas)||_2 / ||AC(P_meas)||_2",
+    )
+    _metric(
+        metrics,
+        "ac_level_difference",
+        comparison.ac_level_difference_db,
+        "dB",
+        "time",
+        "20*log10(RMS(AC(P_sim)) / RMS(AC(P_meas))); positive: simulation higher",
     )
     _metric(metrics, "alignment_integer_start", comparison.lag_samples, "samples", "time")
     _metric(
