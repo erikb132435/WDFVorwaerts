@@ -1,0 +1,341 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-09-09T17:12:27+02:00",
+  "case_id": "Spk-2_two-tone_81p4-344p79Hz_3Vrms_Fast",
+  "validation_status": "evaluated_without_acceptance_threshold",
+  "experiment": "two_tone",
+  "preset_name": "Spk-2",
+  "fs_hz": 96000.0,
+  "summary": "Spk-2: Zweiton-Anregung bei 81.400 Hz und 344.790 Hz; A_in = 3 V; tatsächlich angewendet: 4.24264 V RMS (zusätzlich × √2).",
+  "run_config": {
+    "experiment": "two_tone",
+    "preset_name": "Spk-2",
+    "solver_mode": "Schneller Python-Solver",
+    "fs": 96000.0,
+    "vrms": 3.0,
+    "input_level_mode": "Bernardini-Datensatz-Hypothese (zusätzlich × √2)",
+    "duration_s": 1.0,
+    "settle_s": 0.2,
+    "freq1_hz": 81.4,
+    "freq2_hz": 344.79,
+    "phase1_rad": 0.8472,
+    "phase2_rad": 2.2179,
+    "record_internal": false,
+    "reference_enabled": true,
+    "reference_path": "data/BernardiniMessungen/fig7b/FSN020.71-4_multi_P_meas.txt"
+  },
+  "model_parameters": {
+    "preset_name": "Spk-2",
+    "Re": 3.29,
+    "Mms": 0.001476,
+    "Rms": 0.344,
+    "Sd": 0.0017870000000000002,
+    "resonance_hz": 162.8,
+    "Rcab": 136.9273,
+    "Ccab": 7.1487e-06,
+    "Ral": 1369.3,
+    "Bl_coeffs": [
+      2.219,
+      155.63,
+      -157600.0,
+      -2459600.0,
+      3367300000.0
+    ],
+    "Le_coeffs": [
+      3.6e-05,
+      -0.016303,
+      1.8228000000000002,
+      724.16,
+      -60093.99999999999
+    ],
+    "Kms_coeffs": [
+      1540.0,
+      -348980.0,
+      108910000.0,
+      -9076400000.0,
+      2873800000000.0
+    ],
+    "xi_x": 0.9999,
+    "xi_Le": 0.9999,
+    "xi_Cms": 0.9999
+  },
+  "solver": {
+    "mode": "Schneller Python-Solver",
+    "primary_backend": "fast",
+    "fast_solver_version": "0.2.0",
+    "reference_solver_version": null
+  },
+  "software": {
+    "python": "3.14.4",
+    "numpy": "2.4.4",
+    "platform": "Windows-11-10.0.22631-SP0",
+    "python_executable": "C:\\Users\\erikb\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe"
+  },
+  "reference_files": [
+    {
+      "roles": [
+        "selected_reference",
+        "time_reference"
+      ],
+      "source_path": "data/BernardiniMessungen/fig7b/FSN020.71-4_multi_P_meas.txt",
+      "archive_path": "references/FSN020.71-4_multi_P_meas.txt",
+      "sha256": "26408a43933c72b5610d2d4a02ffa6de6fda5d6e9d2f83fa5a8d7a66f2b3c8e3"
+    }
+  ],
+  "reference_metadata": {
+    "path": "data/BernardiniMessungen/fig7b/FSN020.71-4_multi_P_meas.txt",
+    "figure": "7b",
+    "preset_name": "Spk-2",
+    "speaker_model": "FSN020.71-4",
+    "source_type": "measurement",
+    "experiment": "two_tone",
+    "quantity": "output_pressure",
+    "domain": "time",
+    "x_unit": "s",
+    "value_unit": "Pa",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1.0,
+    "fs_hz": 96000.0,
+    "expected_vrms": null,
+    "expected_frequencies_hz": [
+      81.4,
+      344.79
+    ],
+    "expected_phases_rad": [
+      0.8472,
+      2.2179
+    ],
+    "notes": [
+      "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+    ]
+  },
+  "time_reference_metadata": {
+    "path": "data/BernardiniMessungen/fig7b/FSN020.71-4_multi_P_meas.txt",
+    "figure": "7b",
+    "preset_name": "Spk-2",
+    "speaker_model": "FSN020.71-4",
+    "source_type": "measurement",
+    "experiment": "two_tone",
+    "quantity": "output_pressure",
+    "domain": "time",
+    "x_unit": "s",
+    "value_unit": "Pa",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1.0,
+    "fs_hz": 96000.0,
+    "expected_vrms": null,
+    "expected_frequencies_hz": [
+      81.4,
+      344.79
+    ],
+    "expected_phases_rad": [
+      0.8472,
+      2.2179
+    ],
+    "notes": [
+      "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+    ]
+  },
+  "metrics": [
+    {
+      "metric": "rmse",
+      "value": 0.03387485702122407,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "reference_rms",
+      "value": 0.3510907156983616,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "absolute_nrmse",
+      "value": 0.09648462778015339,
+      "unit": "1",
+      "scope": "time",
+      "definition": "||P_sim-P_meas||_2 / ||P_meas||_2"
+    },
+    {
+      "metric": "ac_rmse",
+      "value": 0.020292937407184745,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "ac_reference_rms",
+      "value": 0.349268760361635,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "ac_nrmse",
+      "value": 0.058101209470246676,
+      "unit": "1",
+      "scope": "time",
+      "definition": "||AC(P_sim)-AC(P_meas)||_2 / ||AC(P_meas)||_2"
+    },
+    {
+      "metric": "ac_level_difference",
+      "value": -0.09715121880209766,
+      "unit": "dB",
+      "scope": "time",
+      "definition": "20*log10(RMS(AC(P_sim)) / RMS(AC(P_meas))); positive: simulation higher"
+    },
+    {
+      "metric": "alignment_integer_start",
+      "value": 77295,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_fractional_offset",
+      "value": -0.2773958802094429,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_start",
+      "value": 77294.72260411979,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_correlation",
+      "value": 0.9983556921353911,
+      "unit": "1",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "comparison_samples",
+      "value": 6720,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "comparison_duration",
+      "value": 0.06999999999999999,
+      "unit": "s",
+      "scope": "time",
+      "definition": ""
+    }
+  ],
+  "result_metadata": {
+    "f1_hz": 81.4,
+    "f2_hz": 344.79,
+    "input_level_parameter_vrms": 3.0,
+    "input_rms_voltage_v": 4.242640687119286,
+    "input_level_scale_factor": 1.4142135623730951,
+    "input_level_mode": "Bernardini-Datensatz-Hypothese (zusätzlich × √2)",
+    "input_level_definition": "rms(V_in) = sqrt(2) * A_in (empirische Datensatz-Hypothese)",
+    "solver_mode": "Schneller Python-Solver",
+    "primary_solver_backend": "fast",
+    "fast_solver_time_s": 0.4264599001035094,
+    "reference_metadata": {
+      "path": "data/BernardiniMessungen/fig7b/FSN020.71-4_multi_P_meas.txt",
+      "figure": "7b",
+      "preset_name": "Spk-2",
+      "speaker_model": "FSN020.71-4",
+      "source_type": "measurement",
+      "experiment": "two_tone",
+      "quantity": "output_pressure",
+      "domain": "time",
+      "x_unit": "s",
+      "value_unit": "Pa",
+      "value_scale": "linear",
+      "applied_value_scale_factor": 1.0,
+      "fs_hz": 96000.0,
+      "expected_vrms": null,
+      "expected_frequencies_hz": [
+        81.4,
+        344.79
+      ],
+      "expected_phases_rad": [
+        0.8472,
+        2.2179
+      ],
+      "notes": [
+        "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+      ]
+    },
+    "time_reference_metadata": {
+      "path": "data/BernardiniMessungen/fig7b/FSN020.71-4_multi_P_meas.txt",
+      "figure": "7b",
+      "preset_name": "Spk-2",
+      "speaker_model": "FSN020.71-4",
+      "source_type": "measurement",
+      "experiment": "two_tone",
+      "quantity": "output_pressure",
+      "domain": "time",
+      "x_unit": "s",
+      "value_unit": "Pa",
+      "value_scale": "linear",
+      "applied_value_scale_factor": 1.0,
+      "fs_hz": 96000.0,
+      "expected_vrms": null,
+      "expected_frequencies_hz": [
+        81.4,
+        344.79
+      ],
+      "expected_phases_rad": [
+        0.8472,
+        2.2179
+      ],
+      "notes": [
+        "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+      ]
+    },
+    "time_rmse_pa": 0.03387485702122407,
+    "time_reference_rms_pa": 0.3510907156983616,
+    "time_nrmse_relative_rms": 0.09648462778015339,
+    "time_ac_rmse_pa": 0.020292937407184745,
+    "time_ac_reference_rms_pa": 0.349268760361635,
+    "time_ac_nrmse_relative_rms": 0.058101209470246676,
+    "time_ac_level_difference_db": -0.09715121880209766,
+    "time_comparison_samples": 6720,
+    "time_comparison_duration_s": 0.06999999999999999,
+    "alignment_start_integer_sample": 77295,
+    "alignment_fractional_offset_samples": -0.2773958802094429,
+    "alignment_start_sample": 77294.72260411979,
+    "alignment_start_s": 0.8051533604595811,
+    "alignment_correlation": 0.9983556921353911,
+    "nrmse_definition": "||P_sim - P_meas||_2 / ||P_meas||_2",
+    "ac_nrmse_definition": "||(P_sim-mean(P_sim)) - (P_meas-mean(P_meas))||_2 / ||P_meas-mean(P_meas)||_2",
+    "ac_level_difference_definition": "20*log10(RMS(P_sim-mean(P_sim)) / RMS(P_meas-mean(P_meas)))",
+    "reference_notice": "Zeitreferenz Fig. 7b, Spalte „3 V RMS“; der Simulationsausschnitt wurde per normierter Kreuzkorrelation und Subsample-Korrektur ausschließlich zeitlich ausgerichtet. Absoluter NRMSE = 0.0964846 (9.648 %); AC-NRMSE = 0.0581012 (5.810 %); Delta L_AC = -0.097 dB; N = 6720, Simulationsstart = 77294.723 Samples (805.153 ms)."
+  },
+  "array_keys": [
+    "analysis",
+    "experiment",
+    "fs_hz",
+    "input",
+    "output",
+    "preset_name",
+    "reference_output_pressure",
+    "reference_time_s",
+    "simulation_output_pressure_aligned"
+  ],
+  "files": [
+    "comparison_plot.pdf",
+    "metadata.json",
+    "metrics.csv",
+    "references/FSN020.71-4_multi_P_meas.txt",
+    "simulation_raw.npz",
+    "time_comparison.csv"
+  ],
+  "notes": [
+    "Originalreferenzen wurden bytegetreu kopiert und mit SHA-256 dokumentiert.",
+    "Zeitdaten sind ausschliesslich zeitlich ausgerichtet; es erfolgt keine multiplikative Pegelanpassung.",
+    "Spektraldaten liegen auf dem Frequenzraster der ausgewaehlten Referenzdatei.",
+    "Es wurde kein automatisches Bestehenskriterium angewendet."
+  ]
+}

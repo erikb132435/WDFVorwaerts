@@ -2,3 +2,5 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+#ignore fuer zu grosse npy 
+data/AudioCallbackTests/**/*.npy

@@ -1,0 +1,9 @@
+# Numerische Simulation und Signalauswertung
+numpy>=1.21.4
+scipy>=1.7.2
+
+# Grafische Benutzeroberfläche und Ergebnisdarstellung
+matplotlib>=3.4.3
+
+# PortAudio-Hardwaretests (für reine Simulationen nicht erforderlich)
+sounddevice>=0.4.3

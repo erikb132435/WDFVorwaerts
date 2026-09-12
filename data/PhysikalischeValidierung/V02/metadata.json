@@ -1,0 +1,362 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-09-09T17:03:01+02:00",
+  "case_id": "Spk-1_stationary-sine_28p75Hz_11p5Vrms_Fast",
+  "validation_status": "evaluated_without_acceptance_threshold",
+  "experiment": "stationary_sine",
+  "preset_name": "Spk-1",
+  "fs_hz": 96000.0,
+  "summary": "Spk-1: stationärer Sinus bei 28.750 Hz, A_in = 11.5 V RMS (Standard); verwendete Resonanzfrequenz 57.500 Hz; THD -18.506 dB.",
+  "run_config": {
+    "experiment": "stationary_sine",
+    "preset_name": "Spk-1",
+    "solver_mode": "Schneller Python-Solver",
+    "fs": 96000.0,
+    "vrms": 11.5,
+    "input_level_mode": "Standard",
+    "duration_s": 1.0,
+    "settle_s": 0.2,
+    "frequency_mode": "frei wählbar",
+    "freq_hz": 28.75,
+    "harmonics": 5,
+    "record_internal": false,
+    "reference_enabled": true,
+    "reference_path": "data/BernardiniMessungen/fig6a/FSF122.02-8_sin_P_meas.txt"
+  },
+  "model_parameters": {
+    "preset_name": "Spk-1",
+    "Re": 5.91,
+    "Mms": 0.038606,
+    "Rms": 2.814,
+    "Sd": 0.053913,
+    "resonance_hz": 57.5,
+    "Rcab": 18.7072,
+    "Ccab": 7.1487e-06,
+    "Ral": 3741.4,
+    "Bl_coeffs": [
+      13.854,
+      -7.7114,
+      -601905.7,
+      -1660400.0,
+      10107200000.0
+    ],
+    "Le_coeffs": [
+      0.0005470000000000001,
+      -0.0478768,
+      -11.3542,
+      1005.8000000000002,
+      113000.0
+    ],
+    "Kms_coeffs": [
+      4990.0,
+      -260710.2,
+      146605700.0,
+      -4966500000.0,
+      591900000000.0
+    ],
+    "xi_x": 0.9999,
+    "xi_Le": 0.9999,
+    "xi_Cms": 0.9999
+  },
+  "solver": {
+    "mode": "Schneller Python-Solver",
+    "primary_backend": "fast",
+    "fast_solver_version": "0.2.0",
+    "reference_solver_version": null
+  },
+  "software": {
+    "python": "3.14.4",
+    "numpy": "2.4.4",
+    "platform": "Windows-11-10.0.22631-SP0",
+    "python_executable": "C:\\Users\\erikb\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe"
+  },
+  "reference_files": [
+    {
+      "roles": [
+        "selected_reference",
+        "time_reference"
+      ],
+      "source_path": "data/BernardiniMessungen/fig6a/FSF122.02-8_sin_P_meas.txt",
+      "archive_path": "references/FSF122.02-8_sin_P_meas.txt",
+      "sha256": "8e21a81aef245e9c0e33ec1234fba8d506ca96eb707852d1f2347c3dd961b43d"
+    }
+  ],
+  "reference_metadata": {
+    "path": "data/BernardiniMessungen/fig6a/FSF122.02-8_sin_P_meas.txt",
+    "figure": "6a",
+    "preset_name": "Spk-1",
+    "speaker_model": "FSF122.02-8",
+    "source_type": "measurement",
+    "experiment": "sinusoid",
+    "quantity": "output_pressure",
+    "domain": "time",
+    "x_unit": "s",
+    "value_unit": "Pa",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1.0,
+    "fs_hz": 96000.0,
+    "expected_vrms": null,
+    "expected_frequencies_hz": [],
+    "expected_phases_rad": [],
+    "notes": [
+      "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+    ]
+  },
+  "time_reference_metadata": {
+    "path": "data/BernardiniMessungen/fig6a/FSF122.02-8_sin_P_meas.txt",
+    "figure": "6a",
+    "preset_name": "Spk-1",
+    "speaker_model": "FSF122.02-8",
+    "source_type": "measurement",
+    "experiment": "sinusoid",
+    "quantity": "output_pressure",
+    "domain": "time",
+    "x_unit": "s",
+    "value_unit": "Pa",
+    "value_scale": "linear",
+    "applied_value_scale_factor": 1.0,
+    "fs_hz": 96000.0,
+    "expected_vrms": null,
+    "expected_frequencies_hz": [],
+    "expected_phases_rad": [],
+    "notes": [
+      "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+    ]
+  },
+  "metrics": [
+    {
+      "metric": "rmse",
+      "value": 3.8094770854935343,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "reference_rms",
+      "value": 21.884017511245776,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "absolute_nrmse",
+      "value": 0.17407576481493478,
+      "unit": "1",
+      "scope": "time",
+      "definition": "||P_sim-P_meas||_2 / ||P_meas||_2"
+    },
+    {
+      "metric": "ac_rmse",
+      "value": 3.659984652023967,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "ac_reference_rms",
+      "value": 21.848497705043435,
+      "unit": "Pa",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "ac_nrmse",
+      "value": 0.1675165359849482,
+      "unit": "1",
+      "scope": "time",
+      "definition": "||AC(P_sim)-AC(P_meas)||_2 / ||AC(P_meas)||_2"
+    },
+    {
+      "metric": "ac_level_difference",
+      "value": -1.4514285461768328,
+      "unit": "dB",
+      "scope": "time",
+      "definition": "20*log10(RMS(AC(P_sim)) / RMS(AC(P_meas))); positive: simulation higher"
+    },
+    {
+      "metric": "alignment_integer_start",
+      "value": 79414,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_fractional_offset",
+      "value": -0.04922618801725073,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_start",
+      "value": 79413.95077381199,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "alignment_correlation",
+      "value": 0.9974112784762673,
+      "unit": "1",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "comparison_samples",
+      "value": 6720,
+      "unit": "samples",
+      "scope": "time",
+      "definition": ""
+    },
+    {
+      "metric": "comparison_duration",
+      "value": 0.06999999999999999,
+      "unit": "s",
+      "scope": "time",
+      "definition": ""
+    }
+  ],
+  "result_metadata": {
+    "freq_hz": 28.75,
+    "resonance_hz": 57.5,
+    "settle_s": 0.2,
+    "harmonic_data": [
+      {
+        "harmonic": 1,
+        "target_hz": 28.75,
+        "bin_hz": 28.75,
+        "magnitude": 25.857081255036114,
+        "power_db": 25.241290047153953,
+        "relative_db": 0.0
+      },
+      {
+        "harmonic": 2,
+        "target_hz": 57.5,
+        "bin_hz": 57.5,
+        "magnitude": 0.7939049295927245,
+        "power_db": -5.014929984302751,
+        "relative_db": -30.256220031456706
+      },
+      {
+        "harmonic": 3,
+        "target_hz": 86.25,
+        "bin_hz": 86.25,
+        "magnitude": 2.91134075022156,
+        "power_db": 6.271560828744307,
+        "relative_db": -18.96972921840965
+      },
+      {
+        "harmonic": 4,
+        "target_hz": 115.0,
+        "bin_hz": 115.0,
+        "magnitude": 0.3153615803884434,
+        "power_db": -13.034124289757639,
+        "relative_db": -38.275414336911595
+      },
+      {
+        "harmonic": 5,
+        "target_hz": 143.75,
+        "bin_hz": 143.75,
+        "magnitude": 0.47487119009739276,
+        "power_db": -9.478783512199394,
+        "relative_db": -34.72007355935335
+      }
+    ],
+    "thd_db": -18.505945519098717,
+    "input_level_parameter_vrms": 11.5,
+    "input_rms_voltage_v": 11.5,
+    "input_level_scale_factor": 1.0,
+    "input_level_mode": "Standard",
+    "input_level_definition": "rms(V_in) = A_in",
+    "solver_mode": "Schneller Python-Solver",
+    "primary_solver_backend": "fast",
+    "fast_solver_time_s": 0.443836199818179,
+    "reference_metadata": {
+      "path": "data/BernardiniMessungen/fig6a/FSF122.02-8_sin_P_meas.txt",
+      "figure": "6a",
+      "preset_name": "Spk-1",
+      "speaker_model": "FSF122.02-8",
+      "source_type": "measurement",
+      "experiment": "sinusoid",
+      "quantity": "output_pressure",
+      "domain": "time",
+      "x_unit": "s",
+      "value_unit": "Pa",
+      "value_scale": "linear",
+      "applied_value_scale_factor": 1.0,
+      "fs_hz": 96000.0,
+      "expected_vrms": null,
+      "expected_frequencies_hz": [],
+      "expected_phases_rad": [],
+      "notes": [
+        "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+      ]
+    },
+    "time_reference_metadata": {
+      "path": "data/BernardiniMessungen/fig6a/FSF122.02-8_sin_P_meas.txt",
+      "figure": "6a",
+      "preset_name": "Spk-1",
+      "speaker_model": "FSF122.02-8",
+      "source_type": "measurement",
+      "experiment": "sinusoid",
+      "quantity": "output_pressure",
+      "domain": "time",
+      "x_unit": "s",
+      "value_unit": "Pa",
+      "value_scale": "linear",
+      "applied_value_scale_factor": 1.0,
+      "fs_hz": 96000.0,
+      "expected_vrms": null,
+      "expected_frequencies_hz": [],
+      "expected_phases_rad": [],
+      "notes": [
+        "Die Zeitachse ist aus Fs = 96 kHz abgeleitet und nicht in der TXT-Datei enthalten."
+      ]
+    },
+    "time_rmse_pa": 3.8094770854935343,
+    "time_reference_rms_pa": 21.884017511245776,
+    "time_nrmse_relative_rms": 0.17407576481493478,
+    "time_ac_rmse_pa": 3.659984652023967,
+    "time_ac_reference_rms_pa": 21.848497705043435,
+    "time_ac_nrmse_relative_rms": 0.1675165359849482,
+    "time_ac_level_difference_db": -1.4514285461768328,
+    "time_comparison_samples": 6720,
+    "time_comparison_duration_s": 0.06999999999999999,
+    "alignment_start_integer_sample": 79414,
+    "alignment_fractional_offset_samples": -0.04922618801725073,
+    "alignment_start_sample": 79413.95077381199,
+    "alignment_start_s": 0.8272286538938749,
+    "alignment_correlation": 0.9974112784762673,
+    "nrmse_definition": "||P_sim - P_meas||_2 / ||P_meas||_2",
+    "ac_nrmse_definition": "||(P_sim-mean(P_sim)) - (P_meas-mean(P_meas))||_2 / ||P_meas-mean(P_meas)||_2",
+    "ac_level_difference_definition": "20*log10(RMS(P_sim-mean(P_sim)) / RMS(P_meas-mean(P_meas)))",
+    "reference_notice": "Zeitreferenz Fig. 6a, Spalte „11.5 V RMS, 28.75 Hz“; der Simulationsausschnitt wurde per normierter Kreuzkorrelation und Subsample-Korrektur ausschließlich zeitlich ausgerichtet. Absoluter NRMSE = 0.174076 (17.408 %); AC-NRMSE = 0.167517 (16.752 %); Delta L_AC = -1.451 dB; N = 6720, Simulationsstart = 79413.951 Samples (827.229 ms)."
+  },
+  "array_keys": [
+    "analysis",
+    "experiment",
+    "fs_hz",
+    "harmonic_freqs",
+    "harmonic_power_db",
+    "input",
+    "output",
+    "preset_name",
+    "reference_output_pressure",
+    "reference_time_s",
+    "simulation_output_pressure_aligned"
+  ],
+  "files": [
+    "comparison_plot.pdf",
+    "metadata.json",
+    "metrics.csv",
+    "references/FSF122.02-8_sin_P_meas.txt",
+    "simulation_raw.npz",
+    "time_comparison.csv"
+  ],
+  "notes": [
+    "Originalreferenzen wurden bytegetreu kopiert und mit SHA-256 dokumentiert.",
+    "Zeitdaten sind ausschliesslich zeitlich ausgerichtet; es erfolgt keine multiplikative Pegelanpassung.",
+    "Spektraldaten liegen auf dem Frequenzraster der ausgewaehlten Referenzdatei.",
+    "Es wurde kein automatisches Bestehenskriterium angewendet."
+  ]
+}

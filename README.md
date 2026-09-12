@@ -25,18 +25,18 @@ Laufzeituntersuchungen.
 
 ## Installation
 
-Benötigt werden Python, NumPy, SciPy und Matplotlib. Tkinter muss für die GUI
-in der verwendeten Python-Installation verfügbar sein.
+Alle Python-Pakete für Simulation, Auswertung, GUI-Darstellung und den
+optionalen PortAudio-Hardwaretest sind zentral in `requirements.txt`
+aufgeführt:
 
 ```powershell
-python -m pip install numpy scipy matplotlib
+python -m pip install -r requirements.txt
 ```
 
-Für den optionalen Test mit einem realen Audiogerät wird zusätzlich installiert:
-
-```powershell
-python -m pip install -r requirements-audio.txt
-```
+Tkinter gehört zur Python-Installation und wird nicht über `pip` installiert.
+Es muss für die grafische Bedienoberfläche in der verwendeten
+Python-Installation verfügbar sein. `sounddevice` wird nur für den realen
+Audiocallback-Test benötigt; die übrigen Projektfunktionen verwenden es nicht.
 
 Alle nachfolgenden Befehle werden im Projektwurzelordner ausgeführt. Falls eine
 bestimmte Python-Umgebung verwendet wird, kann `python` beispielsweise durch

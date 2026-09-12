@@ -1,0 +1,80 @@
+{
+  "experiment": "stationary_sine",
+  "preset_name": "Spk-1",
+  "fs_hz": 96000.0,
+  "summary": "Spk-1: stationärer Sinus bei 115.000 Hz, A_in = 11.5 V RMS (Standard); verwendete Resonanzfrequenz 57.500 Hz; THD -49.153 dB.",
+  "array_keys": [
+    "analysis",
+    "experiment",
+    "fast_solver_analysis",
+    "fast_solver_output",
+    "fs_hz",
+    "harmonic_freqs",
+    "harmonic_power_db",
+    "input",
+    "output",
+    "preset_name",
+    "reference_solver_analysis",
+    "reference_solver_output",
+    "solver_difference"
+  ],
+  "freq_hz": 115.0,
+  "resonance_hz": 57.5,
+  "settle_s": 0.2,
+  "harmonic_data": [
+    {
+      "harmonic": 1,
+      "target_hz": 115.0,
+      "bin_hz": 115.0,
+      "magnitude": 9.926140628895807,
+      "power_db": 16.925308519060604,
+      "relative_db": 0.0
+    },
+    {
+      "harmonic": 2,
+      "target_hz": 230.0,
+      "bin_hz": 230.0,
+      "magnitude": 0.023711866587361123,
+      "power_db": -35.5109851008777,
+      "relative_db": -52.4362936199383
+    },
+    {
+      "harmonic": 3,
+      "target_hz": 345.0,
+      "bin_hz": 345.0,
+      "magnitude": 0.02519886802943489,
+      "power_db": -34.98267931530403,
+      "relative_db": -51.90798783436463
+    },
+    {
+      "harmonic": 4,
+      "target_hz": 460.0,
+      "bin_hz": 460.0,
+      "magnitude": 0.0002339047509593475,
+      "power_db": -75.62951909510629,
+      "relative_db": -92.55482761416688
+    },
+    {
+      "harmonic": 5,
+      "target_hz": 575.0,
+      "bin_hz": 575.0,
+      "magnitude": 0.0003231098737820914,
+      "power_db": -72.82329536369284,
+      "relative_db": -89.74860388275344
+    }
+  ],
+  "thd_db": -49.15323523881653,
+  "input_level_parameter_vrms": 11.5,
+  "input_rms_voltage_v": 11.5,
+  "input_level_scale_factor": 1.0,
+  "input_level_mode": "Standard",
+  "input_level_definition": "rms(V_in) = A_in",
+  "solver_mode": "Beide Solver vergleichen",
+  "primary_solver_backend": "fast",
+  "reference_solver_time_s": 9.53815899998881,
+  "fast_solver_time_s": 0.4656424999702722,
+  "solver_max_abs_error_pa": 7.283063041541027e-14,
+  "solver_rmse_pa": 2.3934373907439858e-14,
+  "solver_relative_l2_error": 3.3986821640016072e-15,
+  "solver_speedup": 20.483866916352675
+}

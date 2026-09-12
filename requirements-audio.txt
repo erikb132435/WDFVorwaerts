@@ -1,2 +1,0 @@
-# Optionale Abhaengigkeit fuer src/PortAudioBackend.py
-sounddevice>=0.4.3

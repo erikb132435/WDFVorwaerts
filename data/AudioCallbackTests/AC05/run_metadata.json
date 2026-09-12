@@ -1,0 +1,154 @@
+{
+  "schema_version": "1.0",
+  "created_at": "2026-09-09T22:27:05+02:00",
+  "input": {
+    "path": "C:\\Users\\erikb\\OneDrive\\Desktop\\BACode\\data\\WAVs\\musik_test_48k.wav",
+    "sha256": "386e795cb4e9757a7960ad5cb578458ea63faeea20d48fd19255cb9e67784416",
+    "source_normalized_rms": 0.15133054527471987,
+    "voltage_gain": 19.82415377248467,
+    "input_rms_voltage": 3.0
+  },
+  "config": {
+    "fs_hz": 48000,
+    "block_size": 128,
+    "preset_name": "Spk-2",
+    "target_rms_voltage": 3.0,
+    "maximum_duration_s": null,
+    "output_mode": "silent",
+    "dry_output_gain": 0.1,
+    "pressure_pa_per_full_scale": 20.0,
+    "output_peak_limit": 0.1
+  },
+  "audio_output": {
+    "mode": "silent",
+    "dry_output_gain": 0.1,
+    "pressure_is_audio_output": false,
+    "scaled_pressure_monitor_is_audio_output": false,
+    "monitor_diagnostics": {
+      "mode": "silent",
+      "pressure_pa_per_full_scale": 20.0,
+      "output_peak_limit": 0.1,
+      "rendered_audio_peak": 0.0,
+      "clipped_sample_count": 0,
+      "pressure_nonfinite_sample_count": 0
+    }
+  },
+  "engine_statistics": {
+    "fs_hz": 48000.0,
+    "block_size": 128,
+    "sample_count": 17347765,
+    "block_count": 135530,
+    "signal_duration_s": 361.4117708333333,
+    "callback": {
+      "median_us": 562.9500000168264,
+      "p95_us": 930.2549999986798,
+      "p99_us": 1185.0000000126215,
+      "p999_us": 1832.4180999809346,
+      "max_us": 4094.4000000138203
+    },
+    "solver": {
+      "median_us": 555.5999999842243,
+      "p95_us": 915.0999999938847,
+      "p99_us": 1168.6710000037685,
+      "p999_us": 1817.7788999742022,
+      "max_us": 4037.1000000050117
+    },
+    "solver_thread_work": {
+      "unit": "cycles",
+      "median": 1749131.0,
+      "p95": 2871253.6499999994,
+      "p99": 3651132.17,
+      "max": 12736414.0,
+      "p99_over_median": 2.0873977820986536,
+      "max_over_median": 7.281566675108954
+    },
+    "callback_realtime_factor": 4.396092806419584,
+    "solver_realtime_factor": 4.454260107679353,
+    "callback_deadline_misses": 24,
+    "callback_deadline_episodes": {
+      "missed_block_count": 24,
+      "episode_count": 18,
+      "longest_episode_blocks": 3,
+      "longest_episode_duration_ms": 8.000000000009777
+    },
+    "driver_status": {
+      "input_underflows": 0,
+      "input_overflows": 0,
+      "output_underflows": 0,
+      "output_overflows": 0,
+      "priming_output_blocks": 0
+    }
+  },
+  "portaudio_statistics": {
+    "actual_samplerate_hz": 48000.0,
+    "requested_block_size": 128,
+    "stream_block_size": 128,
+    "stream_latency_ms": 22.0,
+    "wasapi_exclusive": false,
+    "adapter_callback": {
+      "median_us": 584.0000000034706,
+      "p95_us": 966.5000000040891,
+      "p99_us": 1216.7710000063882,
+      "p999_us": 1873.7665999789263,
+      "max_us": 4220.800000013014
+    },
+    "adapter_deadline_misses": 28,
+    "adapter_deadline_episodes": {
+      "missed_block_count": 28,
+      "episode_count": 21,
+      "longest_episode_blocks": 3,
+      "longest_episode_duration_ms": 8.000000000009777
+    },
+    "device": {
+      "name": "Lautsprecher (Scarlett Solo USB)",
+      "hostapi": 3,
+      "max_input_channels": 0,
+      "max_output_channels": 2,
+      "default_low_input_latency": 0.0,
+      "default_low_output_latency": 0.003,
+      "default_high_input_latency": 0.0,
+      "default_high_output_latency": 0.01,
+      "default_samplerate": 48000.0
+    },
+    "hostapi": {
+      "name": "Windows WASAPI",
+      "devices": [
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "default_input_device": 17,
+      "default_output_device": 14
+    }
+  },
+  "outputs": {
+    "scientific_pressure": {
+      "path": "output_pressure_pa.npy",
+      "dtype": "float64",
+      "unit": "Pa"
+    },
+    "callback_timing": {
+      "path": "callback_timing.csv",
+      "time_unit": "us"
+    }
+  },
+  "software": {
+    "python": "3.8.10",
+    "numpy": "1.21.4",
+    "sounddevice": "0.4.3",
+    "portaudio": [
+      1246976,
+      "PortAudio V19.7.0-devel, revision 147dd722548358763a8b649b3e4b41dfffbcfbb6"
+    ],
+    "platform": "Windows-10-10.0.22631-SP0",
+    "python_executable": "D:\\PsychoPy\\python.exe"
+  },
+  "notes": [
+    "Alle Dateien wurden erst nach Ende des PortAudio-Streams geschrieben.",
+    "Der wissenschaftliche Ausgang ist Schalldruck in Pascal und kein direktes Audiosignal.",
+    "Der sichere Standardmodus gibt waehrend des Hardwaretests Stille aus.",
+    "Der optionale Druckmonitor verwendet eine feste Skalierung und harte Spitzenbegrenzung."
+  ]
+}

@@ -1,0 +1,14 @@
+metric,value,unit,scope,definition
+rmse,0.09928899750625902,Pa,time,
+reference_rms,0.3911348472892563,Pa,time,
+absolute_nrmse,0.2538485082430708,1,time,||P_sim-P_meas||_2 / ||P_meas||_2
+ac_rmse,0.09376960178150862,Pa,time,
+ac_reference_rms,0.38967583869511296,Pa,time,
+ac_nrmse,0.24063488795073865,1,time,||AC(P_sim)-AC(P_meas)||_2 / ||AC(P_meas)||_2
+ac_level_difference,-2.2202530051895857,dB,time,20*log10(RMS(AC(P_sim)) / RMS(AC(P_meas))); positive: simulation higher
+alignment_integer_start,21943,samples,time,
+alignment_fractional_offset,0.7627044416275709,samples,time,
+alignment_start,21943.762704441626,samples,time,
+alignment_correlation,0.9954628509193336,1,time,
+comparison_samples,6720,samples,time,
+comparison_duration,0.06999999999999999,s,time,

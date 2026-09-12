@@ -81,7 +81,7 @@ PsychoPy-Projektumgebung kann die Verfuegbarkeit so geprueft werden:
 Falls das Paket in einer anderen Python-Umgebung fehlt:
 
 ```powershell
-python -m pip install -r requirements-audio.txt
+python -m pip install -r requirements.txt
 ```
 
 Zuerst werden die Ausgangsgeraete ohne Streamstart aufgelistet:
